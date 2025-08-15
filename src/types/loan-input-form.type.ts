@@ -9,4 +9,5 @@ export interface LoanInputForm {
     roundingDecimals?:number;
     issueDate: Date;
     firstPaymentDate?: Date;
+    moveHolidayToNextDay?: boolean;
 }

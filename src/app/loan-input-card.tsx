@@ -53,6 +53,7 @@ export default function LoanInputCard({
         .min(0, "Ставка не может быть отрицательной"),
       loanType: z.enum(["ANNUITY", "AMORTIZATION"]),
       interestOnlyFirstPeriod: z.boolean().optional(),
+      moveHolidayToNextDay: z.boolean().optional(),
       dayCountBasis: z
         .enum(["ACTUAL_365", "ACTUAL_360", "ACTUAL_ACTUAL"])
         .optional(),
@@ -108,6 +109,7 @@ export default function LoanInputCard({
     dayCountBasis: "ACTUAL_365",
     roundingDecimals: 2,
     issueDate: new Date(),
+    moveHolidayToNextDay: false,
   };
 
   // Get initial values from localStorage or use defaults
@@ -126,7 +128,6 @@ export default function LoanInputCard({
         loanType:
           parsed.loanType === "AMORTIZATION" ? "AMORTIZATION" : "ANNUITY",
         interestRate: Number(parsed.interestRate) || 10,
-        interestOnlyFirstPeriod: Boolean(parsed.interestOnlyFirstPeriod),
         dayCountBasis: ["ACTUAL_365", "ACTUAL_360", "ACTUAL_ACTUAL"].includes(
           parsed.dayCountBasis
         )
@@ -140,6 +141,8 @@ export default function LoanInputCard({
         firstPaymentDate: parsed.firstPaymentDate
           ? new Date(parsed.firstPaymentDate)
           : undefined,
+        interestOnlyFirstPeriod: Boolean(parsed.interestOnlyFirstPeriod),
+        moveHolidayToNextDay: Boolean(parsed.moveHolidayToNextDay),
       };
     } catch (error) {
       console.warn("Failed to load saved loan settings, using defaults", error);
@@ -421,9 +424,23 @@ export default function LoanInputCard({
                               />
                             </FormControl>
                             <FormLabel>Первый месяц проценты</FormLabel>
-                            <FormDescription hidden={true}>
-                              Выберите процентная ставка только за первый период
-                            </FormDescription>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="moveHolidayToNextDay"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center gap-2">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormLabel>
+                              Перенос выходных на следующий день
+                            </FormLabel>
                           </FormItem>
                         )}
                       />

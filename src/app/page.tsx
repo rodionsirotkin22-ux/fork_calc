@@ -78,45 +78,54 @@ const chartConfig = {
 export default function Page() {
   const [data, setData] = useState<LoanScheduleEntry[]>([]);
   const [roundingDecimals, setRoundingDecimals] = useState(2);
+  const [isLoading, setIsLoading] = useState(false);
 
   function onFormSubmit(form: LoanInputForm) {
-    const schedule = generateLoanSchedule({
-      termMonths: form.loanTerm * (form.loanTermType === "y" ? 12 : 1),
-      loanType: form.loanType,
-      principal: form.loanAmount,
-      annualInterestRatePercent: form.interestRate,
-      issueDate: form.issueDate,
-      firstPaymentDate: form.firstPaymentDate,
-      interestOnlyFirstPeriod: form.interestOnlyFirstPeriod,
-      dayCountBasis: form.dayCountBasis,
-    });
-    setData(schedule);
-    setRoundingDecimals(form.roundingDecimals);
+    setIsLoading(true);
+    setData([]);
+    
+    // Имитируем небольшую задержку для визуального эффекта
+    setTimeout(() => {
+      const schedule = generateLoanSchedule({
+        ...form,
+        termMonths: form.loanTerm * (form.loanTermType === "y" ? 12 : 1),
+        principal: form.loanAmount,
+        annualInterestRatePercent: form.interestRate
+      });
+      setData(schedule);
+      setRoundingDecimals(form.roundingDecimals);
+      setIsLoading(false);
+    }, 200);
   }
   return (
-    <div className="w-full h-full flex items-start justify-start mt-10 gap-4">
+    <div className="w-full h-full flex items-start justify-start mt-10 gap-8">
       <div className="ml-10">
         <LoanInputCard onFormSubmit={onFormSubmit} />
       </div>
-
-      <div className="flex flex-col gap-4 w-full items-stretch">
+      <div className="flex flex-col gap-4 w-full items-stretch mr-10">
         <Card className={data.length > 0 ? "h-116" : "h-auto"}>
           <CardHeader>
             <CardTitle className="text-center">Таблица платежей</CardTitle>
           </CardHeader>
           <CardContent className={data.length > 0 ? "h-100 overflow-auto" : ""}>
-            <DataTable
-              columns={columns}
-              data={data.map((item, index) => ({
-                month: index + 1,
-                paymentDate: format(item.paymentDate, "dd.MM.yyyy"),
-                paymentAmount: item.paymentAmount.toFixed(roundingDecimals),
-                principalAmount: item.principalAmount.toFixed(roundingDecimals),
-                interestAmount: item.interestAmount.toFixed(roundingDecimals),
-                remainingPrincipal:
-                  item.remainingPrincipal.toFixed(roundingDecimals),
-              }))}
-            />
+            {isLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-muted-foreground">Расчёт...</div>
+              </div>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={data.map((item, index) => ({
+                  month: index + 1,
+                  paymentDate: format(item.paymentDate, "dd.MM.yyyy"),
+                  paymentAmount: item.paymentAmount.toFixed(roundingDecimals),
+                  principalAmount: item.principalAmount.toFixed(roundingDecimals),
+                  interestAmount: item.interestAmount.toFixed(roundingDecimals),
+                  remainingPrincipal:
+                    item.remainingPrincipal.toFixed(roundingDecimals),
+                }))}
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -184,7 +193,7 @@ export default function Page() {
                       const date = new Date(value);
                       return date.toLocaleDateString(undefined, {
                         month: "short",
-                        day: "numeric",
+                        year: "numeric",
                       });
                     }}
                   />
