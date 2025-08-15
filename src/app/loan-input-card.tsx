@@ -416,7 +416,6 @@ export default function LoanInputCard({
                           <FormItem className="flex items-center gap-2">
                             <FormControl>
                               <Checkbox
-                                id="interest-only-first-period"
                                 checked={field.value}
                                 onCheckedChange={field.onChange}
                               />
