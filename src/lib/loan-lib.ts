@@ -1,188 +1,297 @@
 import {
   addMonths,
   differenceInCalendarDays,
-  isValid,
-  parseISO,
+  getDaysInMonth,
   isLeapYear,
 } from "date-fns";
 
-export interface AnnuityScheduleParams {
+export interface LoanScheduleParams {
   principal: number;
   annualInterestRatePercent: number;
+  loanType: "ANNUITY" | "AMORTIZATION";
   termMonths: number;
-  issueDate: Date | string;
-  firstPaymentDate?: Date | string;
+  issueDate: Date;
+  firstPaymentDate?: Date;
   interestOnlyFirstPeriod?: boolean;
   dayCountBasis?: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL";
   /** Number of fractional digits to round monetary amounts to. Defaults to 2. */
   roundingDecimals?: number;
+  earlyRepayments?: {
+    earlyRepaymentDateStart?: Date | string;
+    earlyRepaymentDateEnd?: Date | string;
+    periodicity?: "MONTHLY" | "QUARTERLY" | "YEARLY";
+    earlyRepaymentAmount?: number;
+    repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
+  }[];
 }
 
-export interface PaymentScheduleEntry {
+export interface LoanScheduleEntry {
   paymentDate: Date;
   paymentAmount: number;
   interestAmount: number;
   principalAmount: number;
   remainingPrincipal: number;
+  earlyRepaymentAmount?: number;
 }
 
-function normalizeDate(input: Date | string): Date {
-  const d = typeof input === "string" ? parseISO(input) : input;
-  if (!isValid(d)) throw new Error("Invalid date provided");
-  return d;
-}
+export function generateLoanSchedule(
+  params: LoanScheduleParams
+): LoanScheduleEntry[] {
+  const schedule: LoanScheduleEntry[] = [];
 
-function roundToDecimals(value: number, decimals: number): number {
-  if (!Number.isFinite(decimals)) return value;
-  const clamped = Math.max(0, Math.min(10, Math.floor(decimals)));
-  const factor = Math.pow(10, clamped);
-  return Math.round((value + Number.EPSILON) * factor) / factor;
-}
-
-function dayCountFraction(
-  from: Date,
-  to: Date,
-  basis: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL"
-): number {
-  if (differenceInCalendarDays(to, from) <= 0) return 0;
-
-  if (basis === "ACTUAL_ACTUAL") {
-    // Actual/Actual: split by calendar years and sum dayCount / daysInYear
-    let cursor = from;
-    let fractionSum = 0;
-    while (differenceInCalendarDays(to, cursor) > 0) {
-      const currentYear = cursor.getFullYear();
-      const yearEnd = new Date(currentYear + 1, 0, 1);
-      const periodEnd = yearEnd < to ? yearEnd : to;
-      const daysInSlice = differenceInCalendarDays(periodEnd, cursor);
-      const daysInYear = isLeapYear(cursor) ? 366 : 365;
-      fractionSum += daysInSlice / daysInYear;
-      cursor = periodEnd;
-    }
-    return fractionSum;
-  }
-
-  const days = differenceInCalendarDays(to, from);
-  const basisDays = basis === "ACTUAL_360" ? 360 : 365;
-  return days / basisDays;
-}
-
-export function generateAnnuitySchedule(
-  params: AnnuityScheduleParams
-): PaymentScheduleEntry[] {
   const {
     principal,
     annualInterestRatePercent,
     termMonths,
-    issueDate: rawIssueDate,
-    firstPaymentDate: rawFirstPaymentDate,
+    issueDate,
+    loanType = "ANNUITY",
+    firstPaymentDate,
     interestOnlyFirstPeriod = false,
     dayCountBasis = "ACTUAL_365",
     roundingDecimals = 2,
+    earlyRepayments = [],
   } = params;
-
-
 
   if (principal <= 0) throw new Error("principal must be > 0");
   if (termMonths <= 0) throw new Error("termMonths must be > 0");
   if (annualInterestRatePercent < 0)
     throw new Error("annualInterestRatePercent must be >= 0");
+  if (firstPaymentDate && firstPaymentDate < issueDate)
+    throw new Error("firstPaymentDate must be >= issueDate");
 
-  const issueDate = normalizeDate(rawIssueDate);
-  let firstPaymentDate: Date;
-  if(!rawFirstPaymentDate) {
-    firstPaymentDate = addMonths(issueDate, 1);
-  } else {
-    firstPaymentDate = normalizeDate(rawFirstPaymentDate);
-  }
-
-  if (differenceInCalendarDays(firstPaymentDate, issueDate) < 0) {
-    throw new Error("firstPaymentDate must be on/after issueDate");
-  }
-
-  const schedule: PaymentScheduleEntry[] = [];
-  const monthlyRate = annualInterestRatePercent / 12 / 100;
-
+  let currentDate = firstPaymentDate ? firstPaymentDate : addMonths(issueDate, 1);
   let remainingPrincipal = principal;
-  let currentPaymentDate = firstPaymentDate;
+  let remainingTermMonths = termMonths;
 
-  // Optional interest-only first period (from issueDate to firstPaymentDate)
-  let amortizationMonths = termMonths;
   if (interestOnlyFirstPeriod) {
-    const fraction = dayCountFraction(
-      issueDate,
-      firstPaymentDate,
-      dayCountBasis
+    const differenceInDays = differenceInCalendarDays(
+      currentDate,
+      issueDate
     );
-    const interestOnlyAmount = roundToDecimals(
-      principal * (annualInterestRatePercent / 100) * fraction
-    , roundingDecimals);
+    const basis = getYearBasis(firstPaymentDate, dayCountBasis);
+    const interestAmount = roundDecimals(
+      (remainingPrincipal *
+        (annualInterestRatePercent / 100) *
+        differenceInDays) /
+        basis,
+      roundingDecimals
+    );
     schedule.push({
-      paymentDate: currentPaymentDate,
-      paymentAmount: interestOnlyAmount,
-      interestAmount: interestOnlyAmount,
+      paymentDate: currentDate,
+      paymentAmount: interestAmount,
+      interestAmount: interestAmount,
       principalAmount: 0,
-      remainingPrincipal: roundToDecimals(remainingPrincipal, roundingDecimals),
+      remainingPrincipal: remainingPrincipal,
     });
-    amortizationMonths -= 1;
-    currentPaymentDate = addMonths(currentPaymentDate, 1);
+    remainingTermMonths = remainingTermMonths - 1;
+    currentDate = addMonths(currentDate, 1);
   }
 
-  if (amortizationMonths <= 0) {
-    return schedule;
-  }
-
-  // Compute level annuity payment for remaining months
-  let annuityPayment: number;
-  if (monthlyRate === 0) {
-    annuityPayment = roundToDecimals(
-      remainingPrincipal / amortizationMonths,
-      roundingDecimals
-    );
+  if (loanType === "ANNUITY") {
+    return scheduleAnnuityPayments({
+      schedule,
+      remainingPrincipal,
+      remainingTermMonths,
+      currentDate,
+      annualInterestRatePercent,
+      dayCountBasis,
+      roundingDecimals,
+      termMonths,
+    });
   } else {
-    const ratePlus1PowN = Math.pow(1 + monthlyRate, amortizationMonths);
-    annuityPayment = roundToDecimals(
-      (remainingPrincipal * monthlyRate * ratePlus1PowN) / (ratePlus1PowN - 1)
-    , roundingDecimals);
+    return scheduleAmortizationPayments({
+      schedule,
+      remainingPrincipal,
+      remainingTermMonths,
+      currentDate,
+      annualInterestRatePercent,
+      dayCountBasis,
+      roundingDecimals,
+      termMonths,
+    });
   }
+}
 
-  for (let i = 1; i <= amortizationMonths; i += 1) {
-    const interestAmount = roundToDecimals(
-      remainingPrincipal * monthlyRate,
-      roundingDecimals
-    );
-    let principalAmount = roundToDecimals(
-      annuityPayment - interestAmount,
-      roundingDecimals
-    );
+export function scheduleAnnuityPayments(dto: {
+  schedule: LoanScheduleEntry[];
+  remainingPrincipal: number;
+  remainingTermMonths: number;
+  currentDate: Date;
+  annualInterestRatePercent: number;
+  dayCountBasis: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL";
+  roundingDecimals: number;
+  termMonths: number;
+}): LoanScheduleEntry[] {
+  const {
+    annualInterestRatePercent,
+    dayCountBasis,
+    roundingDecimals,
+    termMonths,
+  } = dto;
 
-    // Adjust the last installment for rounding residue
-    const isLast = i === amortizationMonths;
-    if (isLast) {
-      principalAmount = roundToDecimals(remainingPrincipal, roundingDecimals);
+  let { schedule, remainingPrincipal, remainingTermMonths, currentDate } = dto;
+
+  const monthlyInterestRate = annualInterestRatePercent / 12 / 100;
+  const monthlyPayment = calculateAnnuityMonthlyPayment(
+    remainingPrincipal,
+    monthlyInterestRate,
+    remainingTermMonths,
+    roundingDecimals
+  );
+
+  while (remainingTermMonths > 0) {
+    if(remainingTermMonths === 1 && remainingPrincipal > 0) {
+      const daysInYear = getYearBasis(currentDate, dayCountBasis);
+      const daysInMonth = getDaysInMonth(currentDate);
+      const interestAmount = roundDecimals(
+        remainingPrincipal *
+          (annualInterestRatePercent / 100 / daysInYear) *
+          daysInMonth,
+        roundingDecimals
+      );
+      schedule.push({
+        paymentDate: currentDate,
+        paymentAmount: roundDecimals(
+          remainingPrincipal + interestAmount,
+          roundingDecimals
+        ),
+        interestAmount: interestAmount,
+        principalAmount: remainingPrincipal,
+        remainingPrincipal: 0,
+      });
+      break;
     }
-
-    const paymentAmount = roundToDecimals(
-      interestAmount + principalAmount,
+    const daysInYear = getYearBasis(currentDate, dayCountBasis);
+    const daysInMonth = getDaysInMonth(currentDate);
+    const interestAmount = roundDecimals(
+      remainingPrincipal *
+        (annualInterestRatePercent / 100 / daysInYear) *
+        daysInMonth,
       roundingDecimals
     );
-    remainingPrincipal = roundToDecimals(
+    const principalAmount = roundDecimals(
+      monthlyPayment - interestAmount,
+      roundingDecimals
+    );
+    remainingPrincipal = roundDecimals(
       remainingPrincipal - principalAmount,
       roundingDecimals
     );
-
     schedule.push({
-      paymentDate: currentPaymentDate,
-      paymentAmount,
-      interestAmount,
-      principalAmount,
-      remainingPrincipal: Math.max(0, remainingPrincipal),
+      paymentDate: currentDate,
+      paymentAmount: monthlyPayment,
+      interestAmount: interestAmount,
+      principalAmount: principalAmount,
+      remainingPrincipal: remainingPrincipal,
     });
-
-    if (!isLast) {
-      currentPaymentDate = addMonths(currentPaymentDate, 1);
-    }
+    currentDate = addMonths(currentDate, 1);
+    remainingTermMonths = remainingTermMonths - 1;
   }
 
   return schedule;
+}
+
+export function scheduleAmortizationPayments(dto: {
+  schedule: LoanScheduleEntry[];
+  remainingPrincipal: number;
+  remainingTermMonths: number;
+  currentDate: Date;
+  annualInterestRatePercent: number;
+  dayCountBasis: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL";
+  roundingDecimals: number;
+  termMonths: number;
+}): LoanScheduleEntry[] {
+  const {
+    annualInterestRatePercent,
+    dayCountBasis,
+    roundingDecimals,
+    termMonths,
+  } = dto;
+
+  let { schedule, remainingPrincipal, currentDate, remainingTermMonths } = dto;
+
+  const monthlyPrincipal = remainingPrincipal / termMonths;
+
+  while (remainingTermMonths > 0) {
+    if(remainingTermMonths === 1 && remainingPrincipal > 0) {
+      const daysInYear = getYearBasis(currentDate, dayCountBasis);
+      const daysInMonth = getDaysInMonth(currentDate);
+      const interestAmount = roundDecimals(
+        remainingPrincipal *
+          (annualInterestRatePercent / 100 / daysInYear) *
+          daysInMonth,
+        roundingDecimals
+      );
+      schedule.push({
+        paymentDate: currentDate,
+        paymentAmount: roundDecimals(
+          remainingPrincipal + interestAmount,
+          roundingDecimals
+        ),
+        interestAmount: interestAmount,
+        principalAmount: remainingPrincipal,
+        remainingPrincipal: 0,
+      });
+      break;
+    }
+    const daysInYear = getYearBasis(currentDate, dayCountBasis);
+    const daysInMonth = getDaysInMonth(currentDate);
+    const interestAmount = roundDecimals(
+      remainingPrincipal *
+        (annualInterestRatePercent / 100 / daysInYear) *
+        daysInMonth,
+      roundingDecimals
+    );
+    remainingPrincipal = roundDecimals(
+      remainingPrincipal - monthlyPrincipal,
+      roundingDecimals
+    );
+    schedule.push({
+      paymentDate: currentDate,
+      paymentAmount: roundDecimals(
+        monthlyPrincipal + interestAmount,
+        roundingDecimals
+      ),
+      interestAmount: interestAmount,
+      principalAmount: monthlyPrincipal,
+      remainingPrincipal,
+    });
+    currentDate = addMonths(currentDate, 1);
+    remainingTermMonths = remainingTermMonths - 1;
+  }
+
+  return schedule;
+}
+
+export function calculateAnnuityMonthlyPayment(
+  principal: number,
+  monthlyInterestRate: number,
+  termMonths: number,
+  roundingDecimals: number
+): number {
+  return roundDecimals(
+    (principal *
+      monthlyInterestRate *
+      Math.pow(1 + monthlyInterestRate, termMonths)) /
+      (Math.pow(1 + monthlyInterestRate, termMonths) - 1),
+    roundingDecimals
+  );
+}
+
+export function getYearBasis(
+  paymentDate: Date,
+  dayCountBasis: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL"
+): number {
+  let daysInYear = 365;
+  if (dayCountBasis === "ACTUAL_360") {
+    daysInYear = 360;
+  }
+  if (dayCountBasis === "ACTUAL_ACTUAL") {
+    daysInYear = isLeapYear(paymentDate) ? 366 : 365;
+  }
+  return daysInYear;
+}
+
+export function roundDecimals(value: number, decimals: number): number {
+  return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
 }

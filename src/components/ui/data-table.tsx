@@ -36,7 +36,7 @@ export function DataTable<TData, TValue>({
     <div className="overflow-hidden rounded-md border h-full w-full">
       <ScrollArea className="h-full">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-secondary">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {

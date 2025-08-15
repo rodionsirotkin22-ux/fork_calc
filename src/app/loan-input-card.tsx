@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -43,21 +43,27 @@ export default function LoanInputCard({
   const schema = z
     .object({
       loanAmount: z.coerce.number().gt(0, "Сумма должна быть больше 0"),
-      loanTerm: z
-        .coerce.number()
+      loanTerm: z.coerce
+        .number()
         .int("Срок должен быть целым числом")
         .gt(0, "Срок должен быть больше 0"),
       loanTermType: z.enum(["y", "m"]),
-      interestRate: z.coerce.number().min(0, "Ставка не может быть отрицательной"),
+      interestRate: z.coerce
+        .number()
+        .min(0, "Ставка не может быть отрицательной"),
+      loanType: z.enum(["ANNUITY", "AMORTIZATION"]),
       interestOnlyFirstPeriod: z.boolean().optional(),
       dayCountBasis: z
-        .enum(["ACTUAL_365", "ACTUAL_360", "ACTUAL_ACTUAL"]) 
+        .enum(["ACTUAL_365", "ACTUAL_360", "ACTUAL_ACTUAL"])
         .optional(),
-      roundingDecimals: z
-        .union([
-          z.coerce.number().int("Должно быть целым числом").min(0, "Минимум 0").max(10, "Максимум 10"),
-          z.undefined(),
-        ]),
+      roundingDecimals: z.union([
+        z.coerce
+          .number()
+          .int("Должно быть целым числом")
+          .min(0, "Минимум 0")
+          .max(10, "Максимум 10"),
+        z.undefined(),
+      ]),
       issueDate: z.coerce.date(),
       firstPaymentDate: z.union([z.coerce.date(), z.undefined()]),
     })
@@ -91,54 +97,60 @@ export default function LoanInputCard({
         });
       }
     });
-  const form = useForm<LoanInputForm>({
-    resolver: zodResolver(schema) as unknown as Resolver<LoanInputForm>,
-    defaultValues: {
-      loanAmount: 100000,
-      loanTerm: 12,
-      loanTermType: "m",
-      interestRate: 10,
-      interestOnlyFirstPeriod: false,
-      dayCountBasis: "ACTUAL_365",
-      roundingDecimals: 2,
-      issueDate: new Date(),
-    },
-  });
 
-  // Load saved settings from localStorage on mount
-  useEffect(() => {
+  const defaultValues: LoanInputForm = {
+    loanAmount: 100000,
+    loanTerm: 12,
+    loanTermType: "m",
+    loanType: "ANNUITY",
+    interestRate: 10,
+    interestOnlyFirstPeriod: false,
+    dayCountBasis: "ACTUAL_365",
+    roundingDecimals: 2,
+    issueDate: new Date(),
+  };
+
+  // Get initial values from localStorage or use defaults
+  const getInitialValues = (): LoanInputForm => {
     try {
       const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) {
+        return defaultValues;
+      }
+
       const parsed = JSON.parse(raw);
-      const restored: LoanInputForm = {
-        loanAmount: Number(parsed.loanAmount) || 0,
-        loanTerm: Number(parsed.loanTerm) || 0,
+      return {
+        loanAmount: Number(parsed.loanAmount) || 100000,
+        loanTerm: Number(parsed.loanTerm) || 12,
         loanTermType: parsed.loanTermType === "y" ? "y" : "m",
-        interestRate: Number(parsed.interestRate) || 0,
+        loanType:
+          parsed.loanType === "AMORTIZATION" ? "AMORTIZATION" : "ANNUITY",
+        interestRate: Number(parsed.interestRate) || 10,
         interestOnlyFirstPeriod: Boolean(parsed.interestOnlyFirstPeriod),
-        dayCountBasis: [
-          "ACTUAL_365",
-          "ACTUAL_360",
-          "ACTUAL_ACTUAL",
-        ].includes(parsed.dayCountBasis)
+        dayCountBasis: ["ACTUAL_365", "ACTUAL_360", "ACTUAL_ACTUAL"].includes(
+          parsed.dayCountBasis
+        )
           ? parsed.dayCountBasis
           : "ACTUAL_365",
         roundingDecimals:
           parsed.roundingDecimals === "" || parsed.roundingDecimals == null
-            ? 0
+            ? 2
             : Number(parsed.roundingDecimals),
         issueDate: parsed.issueDate ? new Date(parsed.issueDate) : new Date(),
         firstPaymentDate: parsed.firstPaymentDate
           ? new Date(parsed.firstPaymentDate)
           : undefined,
       };
-      form.reset(restored);
     } catch (error) {
-      console.warn("Failed to load saved loan settings", error);
+      console.warn("Failed to load saved loan settings, using defaults", error);
+      return defaultValues;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
+
+  const form = useForm<LoanInputForm>({
+    resolver: zodResolver(schema) as unknown as Resolver<LoanInputForm>,
+    defaultValues: getInitialValues(),
+  });
 
   // Persist settings to localStorage on any change
   useEffect(() => {
@@ -159,7 +171,9 @@ export default function LoanInputCard({
   return (
     <div className="flex items-center justify-center">
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">Кредитный калькулятор</CardHeader>
+        <CardHeader>
+          <CardTitle className="text-center">Кредитный калькулятор</CardTitle>
+        </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -173,56 +187,58 @@ export default function LoanInputCard({
                       <FormControl>
                         <Input type="number" placeholder="100000" {...field} />
                       </FormControl>
-                      
+
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <div className="flex gap-2">
-                  <FormField
-                    control={form.control}
-                    name="loanTerm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Срок кредита</FormLabel>
-
-                        <FormControl>
-                          <Input type="number" placeholder="12" {...field} />
-                        </FormControl>
-                        <FormDescription hidden={true}>
-                          Введите срок кредита (число)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="loanTermType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Срок кредита</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <SelectTrigger className="w-30">
-                            <FormControl>
-                              <SelectValue />
-                            </FormControl>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="y">лет</SelectItem>
-                            <SelectItem value="m">месяцев</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription hidden={true}>
-                          Выберите срок кредита (лет или месяцев)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="space-y-2">
+                  <FormLabel className="text-sm font-medium">
+                    Срок кредита
+                  </FormLabel>
+                  <div className="flex gap-2">
+                    <FormField
+                      control={form.control}
+                      name="loanTerm"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormControl>
+                            <Input type="number" placeholder="12" {...field} />
+                          </FormControl>
+                          <FormDescription hidden={true}>
+                            Введите срок кредита (число)
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="loanTermType"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <SelectTrigger>
+                              <FormControl>
+                                <SelectValue />
+                              </FormControl>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="y">лет</SelectItem>
+                              <SelectItem value="m">месяцев</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription hidden={true}>
+                            Выберите единицу измерения срока (месяцев или лет)
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
                 <FormField
                   control={form.control}
@@ -242,13 +258,42 @@ export default function LoanInputCard({
                 />
                 <FormField
                   control={form.control}
+                  name="loanType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Тип платежа</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger>
+                          <FormControl>
+                            <SelectValue />
+                          </FormControl>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ANNUITY">Аннуитетный</SelectItem>
+                          <SelectItem value="AMORTIZATION">
+                            Дифференцированный
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription hidden={true}>
+                        Выберите тип платежа кредита
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="issueDate"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Дата выдачи кредита</FormLabel>
                       <FormControl>
-                         <DatePickerNew
-                           key={field.value ? field.value.toISOString() : "none"}
+                        <DatePickerNew
+                          key={field.value ? field.value.toISOString() : "none"}
                           onDateChange={field.onChange}
                           defaultDate={field.value}
                         />
@@ -268,7 +313,7 @@ export default function LoanInputCard({
                       <FormLabel>Дата первого платежа</FormLabel>
                       <FormControl>
                         <DatePickerNew
-                           key={field.value ? field.value.toISOString() : "none"}
+                          key={field.value ? field.value.toISOString() : "none"}
                           onDateChange={field.onChange}
                           defaultDate={field.value}
                           placeholder={form
@@ -300,7 +345,7 @@ export default function LoanInputCard({
                     </CollapsibleTrigger>
                   </div>
                   <CollapsibleContent>
-                    <div className="flex  flex-col gap-2">
+                    <div className="flex flex-1 flex-col gap-2">
                       <FormField
                         control={form.control}
                         name="roundingDecimals"

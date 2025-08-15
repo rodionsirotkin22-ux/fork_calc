@@ -1,6 +1,7 @@
 export interface LoanInputForm {
     loanAmount: number;
     loanTerm: number;
+    loanType: "ANNUITY" | "AMORTIZATION";
     loanTermType: "y" | "m";
     interestRate: number;
     interestOnlyFirstPeriod?:boolean;
