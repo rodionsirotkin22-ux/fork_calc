@@ -66,35 +66,14 @@ export default function LoanInputCard({
         z.undefined(),
       ]),
       issueDate: z.coerce.date(),
-      firstPaymentDate: z.union([z.coerce.date(), z.undefined()]),
+      paymentDayNumber: z.coerce.number().int("Должно быть целым числом").min(1, "Минимум 1").max(31, "Максимум 31"),
     })
     .superRefine((val, ctx) => {
       if (!(val.issueDate instanceof Date) || isNaN(val.issueDate.getTime())) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ["issueDate"],
           message: "Неверная дата",
-        });
-      }
-      if (
-        val.firstPaymentDate &&
-        (!(val.firstPaymentDate instanceof Date) ||
-          isNaN(val.firstPaymentDate.getTime()))
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["firstPaymentDate"],
-          message: "Неверная дата",
-        });
-      }
-      if (
-        val.firstPaymentDate &&
-        val.firstPaymentDate.getTime() < val.issueDate.getTime()
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["firstPaymentDate"],
-          message: "Дата первого платежа должна быть не раньше даты выдачи",
         });
       }
     });
@@ -109,6 +88,7 @@ export default function LoanInputCard({
     dayCountBasis: "ACTUAL_365",
     roundingDecimals: 2,
     issueDate: new Date(),
+    paymentDayNumber: 20,
     moveHolidayToNextDay: false,
   };
 
@@ -138,9 +118,9 @@ export default function LoanInputCard({
             ? 2
             : Number(parsed.roundingDecimals),
         issueDate: parsed.issueDate ? new Date(parsed.issueDate) : new Date(),
-        firstPaymentDate: parsed.firstPaymentDate
-          ? new Date(parsed.firstPaymentDate)
-          : undefined,
+        paymentDayNumber: parsed.paymentDayNumber
+          ? Number(parsed.paymentDayNumber)
+          : 20,
         interestOnlyFirstPeriod: Boolean(parsed.interestOnlyFirstPeriod),
         moveHolidayToNextDay: Boolean(parsed.moveHolidayToNextDay),
       };
@@ -310,26 +290,15 @@ export default function LoanInputCard({
                 />
                 <FormField
                   control={form.control}
-                  name="firstPaymentDate"
+                  name="paymentDayNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Дата первого платежа</FormLabel>
+                      <FormLabel>День первого платежа</FormLabel>
                       <FormControl>
-                        <DatePickerNew
-                          key={field.value ? field.value.toISOString() : "none"}
-                          onDateChange={field.onChange}
-                          defaultDate={field.value}
-                          placeholder={form
-                            .getValues()
-                            .issueDate.toLocaleDateString(undefined, {
-                              day: "2-digit",
-                              month: "long",
-                              year: "numeric",
-                            })}
-                        />
+                          <Input type="number" placeholder="20" {...field} />
                       </FormControl>
                       <FormDescription hidden={true}>
-                        Введите дату первого платежа
+                        Введите день первого платежа
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -383,7 +352,7 @@ export default function LoanInputCard({
                         name="dayCountBasis"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>База расчета дней</FormLabel>
+                            <FormLabel>База расчета дней в году</FormLabel>
                             <Select
                               onValueChange={field.onChange}
                               defaultValue={field.value}
@@ -406,7 +375,7 @@ export default function LoanInputCard({
                               </SelectContent>
                             </Select>
                             <FormDescription hidden={true}>
-                              Выберите базу расчета дней
+                              Выберите базу расчета дней в году
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -439,7 +408,7 @@ export default function LoanInputCard({
                               />
                             </FormControl>
                             <FormLabel>
-                              Перенос выходных на следующий день
+                              Перенос выходных на следующий рабочий день
                             </FormLabel>
                           </FormItem>
                         )}

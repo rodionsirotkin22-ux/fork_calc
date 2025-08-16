@@ -215,13 +215,13 @@ export default function Page() {
                   />
                   <Area
                     dataKey="paymentAmount"
-                    type="natural"
+                    type="linear"
                     fill="url(#fillPaymentAmount)"
                     stroke="#10b981"
                   />
                   <Area
                     dataKey="interestAmount"
-                    type="natural"
+                    type="linear"
                     fill="url(#fillInterestAmount)"
                     stroke="#60a5fa"
                   />

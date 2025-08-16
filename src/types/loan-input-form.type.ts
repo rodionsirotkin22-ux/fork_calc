@@ -8,6 +8,6 @@ export interface LoanInputForm {
     dayCountBasis?: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL";
     roundingDecimals?:number;
     issueDate: Date;
-    firstPaymentDate?: Date;
+    paymentDayNumber?: number;
     moveHolidayToNextDay?: boolean;
 }
