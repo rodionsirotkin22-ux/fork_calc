@@ -110,7 +110,10 @@ export function generateLoanSchedule(
       continue;
     }
 
-    if (remainingTermMonths === 1 && remainingPrincipal > 0) {
+    if (
+      remainingTermMonths === 1 ||
+      (loanType === "ANNUITY" && remainingPrincipal <= monthlyPayment)
+    ) {
       schedule.push({
         paymentDate: currentDate,
         paymentAmount: roundDecimals(

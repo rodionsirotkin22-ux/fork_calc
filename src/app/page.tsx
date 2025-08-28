@@ -37,7 +37,7 @@ interface LoanScheduleRow {
   remainingPrincipal: string;
 }
 
-export const columns: ColumnDef<LoanScheduleRow>[] = [
+const columns: ColumnDef<LoanScheduleRow>[] = [
   {
     header: "№",
     accessorKey: "month",
