@@ -263,9 +263,9 @@ export default function Page() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div className="text-center p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400 break-words">
                         {summary.totalPayments.toLocaleString('ru-RU', { 
                           minimumFractionDigits: 2, 
                           maximumFractionDigits: 2 
@@ -274,7 +274,7 @@ export default function Page() {
                       <div className="text-xs text-blue-600 dark:text-blue-400">Общая сумма</div>
                     </div>
                     <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-                      <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                      <div className="text-lg font-bold text-green-600 dark:text-green-400 break-words">
                         {summary.totalPrincipal.toLocaleString('ru-RU', { 
                           minimumFractionDigits: 2, 
                           maximumFractionDigits: 2 
@@ -283,7 +283,7 @@ export default function Page() {
                       <div className="text-xs text-green-600 dark:text-green-400">Основной долг</div>
                     </div>
                     <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
-                      <div className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                      <div className="text-lg font-bold text-orange-600 dark:text-orange-400 break-words">
                         {summary.totalInterest.toLocaleString('ru-RU', { 
                           minimumFractionDigits: 2, 
                           maximumFractionDigits: 2 
@@ -292,7 +292,7 @@ export default function Page() {
                       <div className="text-xs text-orange-600 dark:text-orange-400">Проценты</div>
                     </div>
                     <div className="text-center p-3 bg-purple-50 dark:bg-purple-950 rounded-lg">
-                      <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                      <div className="text-lg font-bold text-purple-600 dark:text-purple-400 break-words">
                         {summary.monthlyPayment.toLocaleString('ru-RU', { 
                           minimumFractionDigits: 2, 
                           maximumFractionDigits: 2 

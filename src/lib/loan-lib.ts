@@ -73,7 +73,7 @@ export function generateLoanSchedule(
   let remainingTermMonths = termMonths;
   const monthlyInterestRate = annualInterestRatePercent / 12 / 100;
   const termMonthsToCalculate = interestOnlyFirstPeriod
-    ? termMonths - 1
+    ? termMonths - 2
     : termMonths;
   const monthlyPayment = calculateAnnuityMonthlyPayment({
     principal,
