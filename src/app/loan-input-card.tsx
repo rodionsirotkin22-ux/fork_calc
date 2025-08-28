@@ -16,7 +16,6 @@ import { useForm } from "react-hook-form";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -27,12 +26,20 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronsUpDown } from "lucide-react";
-import { useEffect } from "react";
+import { ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
+
+const earlyRepaymentSchema = z.object({
+  earlyRepaymentDateStart: z.coerce.date().optional(),
+  earlyRepaymentDateEnd: z.coerce.date().optional(),
+  periodicity: z.enum(["ONCE", "MONTHLY", "QUARTERLY", "YEARLY"]).optional(),
+  earlyRepaymentAmount: z.coerce.number().positive("Сумма должна быть больше 0").optional(),
+  repaymentType: z.enum(["DECREASE_TERM", "DECREASE_PAYMENT"]).optional(),
+});
 
 export default function LoanInputCard({
   onFormSubmit,
@@ -40,6 +47,15 @@ export default function LoanInputCard({
   onFormSubmit?: (data: LoanInputForm) => void;
 }) {
   const LOCAL_STORAGE_KEY = "loan-input-form-settings";
+  const [earlyRepayments, setEarlyRepayments] = useState<Array<{
+    id: string;
+    earlyRepaymentDateStart?: Date;
+    earlyRepaymentDateEnd?: Date;
+    periodicity?: "ONCE" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+    earlyRepaymentAmount?: number;
+    repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
+  }>>([]);
+
   const schema = z
     .object({
       loanAmount: z.coerce.number().gt(0, "Сумма должна быть больше 0"),
@@ -67,6 +83,7 @@ export default function LoanInputCard({
       ]),
       issueDate: z.coerce.date(),
       paymentDayNumber: z.coerce.number().int("Должно быть целым числом").min(1, "Минимум 1").max(31, "Максимум 31"),
+      earlyRepayments: z.array(earlyRepaymentSchema).optional(),
     })
     .superRefine((val, ctx) => {
       if (!(val.issueDate instanceof Date) || isNaN(val.issueDate.getTime())) {
@@ -90,6 +107,7 @@ export default function LoanInputCard({
     issueDate: new Date(),
     paymentDayNumber: 20,
     moveHolidayToNextDay: false,
+    earlyRepayments: [],
   };
 
   // Get initial values from localStorage or use defaults
@@ -123,6 +141,7 @@ export default function LoanInputCard({
           : 20,
         interestOnlyFirstPeriod: Boolean(parsed.interestOnlyFirstPeriod),
         moveHolidayToNextDay: Boolean(parsed.moveHolidayToNextDay),
+        earlyRepayments: parsed.earlyRepayments || [],
       };
     } catch (error) {
       console.warn("Failed to load saved loan settings, using defaults", error);
@@ -139,290 +158,443 @@ export default function LoanInputCard({
   useEffect(() => {
     const subscription = form.watch((value) => {
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(value));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+          ...value,
+          earlyRepayments: earlyRepayments.map(er => ({
+            earlyRepaymentDateStart: er.earlyRepaymentDateStart,
+            earlyRepaymentDateEnd: er.earlyRepaymentDateEnd,
+            periodicity: er.periodicity,
+            earlyRepaymentAmount: er.earlyRepaymentAmount,
+            repaymentType: er.repaymentType,
+          }))
+        }));
       } catch (error) {
         console.warn("Failed to save loan settings", error);
       }
     });
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, earlyRepayments]);
+
+  // Load early repayments from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.earlyRepayments && Array.isArray(parsed.earlyRepayments)) {
+          setEarlyRepayments(parsed.earlyRepayments.map((er: any, index: number) => ({
+            id: `er-${index}`,
+            ...er,
+            earlyRepaymentDateStart: er.earlyRepaymentDateStart ? new Date(er.earlyRepaymentDateStart) : undefined,
+            earlyRepaymentDateEnd: er.earlyRepaymentDateEnd ? new Date(er.earlyRepaymentDateEnd) : undefined,
+          })));
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load early repayments", error);
+    }
+  }, []);
+
+  const addEarlyRepayment = () => {
+    const newId = `er-${Date.now()}`;
+    setEarlyRepayments([...earlyRepayments, {
+      id: newId,
+      periodicity: "MONTHLY",
+      repaymentType: "DECREASE_PAYMENT",
+    }]);
+  };
+
+  const removeEarlyRepayment = (id: string) => {
+    setEarlyRepayments(earlyRepayments.filter(er => er.id !== id));
+  };
+
+  const updateEarlyRepayment = (id: string, field: string, value: any) => {
+    setEarlyRepayments(earlyRepayments.map(er => 
+      er.id === id ? { ...er, [field]: value } : er
+    ));
+  };
 
   function onSubmit(data: LoanInputForm) {
-    onFormSubmit?.(data);
+    const formData = {
+      ...data,
+      earlyRepayments: earlyRepayments.map(er => ({
+        earlyRepaymentDateStart: er.earlyRepaymentDateStart,
+        earlyRepaymentDateEnd: er.earlyRepaymentDateEnd,
+        periodicity: er.periodicity,
+        earlyRepaymentAmount: er.earlyRepaymentAmount,
+        repaymentType: er.repaymentType,
+      }))
+    };
+    onFormSubmit?.(formData);
   }
 
   return (
-    <div className="flex items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-center">Кредитный калькулятор</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="flex flex-col gap-4">
-                <FormField
-                  control={form.control}
-                  name="loanAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Размер кредита</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="100000" {...field} />
-                      </FormControl>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="text-center text-xl">Настройки кредита</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            {/* Основные параметры в сетке */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+              <FormField
+                control={form.control}
+                name="loanAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Размер кредита</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="100000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="space-y-2">
-                  <FormLabel className="text-sm font-medium">
-                    Срок кредита
-                  </FormLabel>
-                  <div className="flex gap-2">
+              <div className="space-y-2">
+                <FormLabel className="text-sm font-medium">
+                  Срок кредита
+                </FormLabel>
+                <div className="flex gap-2">
+                  <FormField
+                    control={form.control}
+                    name="loanTerm"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input type="number" placeholder="12" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="loanTermType"
+                    render={({ field }) => (
+                      <FormItem className="w-24">
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <SelectTrigger>
+                            <FormControl>
+                              <SelectValue />
+                            </FormControl>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="y">лет</SelectItem>
+                            <SelectItem value="m">мес.</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="interestRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Процентная ставка (%)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="10" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="loanType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Тип платежа</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <SelectTrigger>
+                        <FormControl>
+                          <SelectValue />
+                        </FormControl>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ANNUITY">Аннуитетный</SelectItem>
+                        <SelectItem value="AMORTIZATION">
+                          Дифференцированный
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="issueDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Дата выдачи кредита</FormLabel>
+                    <FormControl>
+                      <DatePickerNew
+                        key={field.value ? field.value.toISOString() : "none"}
+                        onDateChange={field.onChange}
+                        defaultDate={field.value}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="paymentDayNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>День платежа</FormLabel>
+                    <FormControl>
+                        <Input type="number" placeholder="20" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Досрочные погашения */}
+            <Collapsible className="mb-6" defaultOpen>
+              <div className="flex justify-between items-center gap-2 mb-3">
+                <h4 className="text-sm font-semibold">
+                  Досрочные погашения
+                </h4>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8">
+                    <ChevronsUpDown />
+                    <span className="sr-only">Toggle</span>
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <div className="space-y-4">
+                  {earlyRepayments.map((er) => (
+                    <div key={er.id} className="p-4 border rounded-lg space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Досрочное погашение</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6"
+                          onClick={() => removeEarlyRepayment(er.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Дата начала</label>
+                          <DatePickerNew
+                            onDateChange={(date) => updateEarlyRepayment(er.id, 'earlyRepaymentDateStart', date)}
+                            defaultDate={er.earlyRepaymentDateStart}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Дата окончания</label>
+                          <DatePickerNew
+                            onDateChange={(date) => updateEarlyRepayment(er.id, 'earlyRepaymentDateEnd', date)}
+                            defaultDate={er.earlyRepaymentDateEnd}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Периодичность</label>
+                          <Select
+                            value={er.periodicity}
+                            onValueChange={(value) => updateEarlyRepayment(er.id, 'periodicity', value)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ONCE">Один раз</SelectItem>
+                              <SelectItem value="MONTHLY">Ежемесячно</SelectItem>
+                              <SelectItem value="QUARTERLY">Ежеквартально</SelectItem>
+                              <SelectItem value="YEARLY">Ежегодно</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Тип погашения</label>
+                          <Select
+                            value={er.repaymentType}
+                            onValueChange={(value) => updateEarlyRepayment(er.id, 'repaymentType', value)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="DECREASE_PAYMENT">Уменьшение платежа</SelectItem>
+                              <SelectItem value="DECREASE_TERM">Уменьшение срока</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Сумма досрочного погашения</label>
+                          <Input
+                            type="number"
+                            placeholder="50000"
+                            value={er.earlyRepaymentAmount || ""}
+                            onChange={(e) => updateEarlyRepayment(er.id, 'earlyRepaymentAmount', Number(e.target.value))}
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addEarlyRepayment}
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить досрочное погашение
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Дополнительные параметры */}
+            <Collapsible className="mb-6">
+              <div className="flex justify-between items-center gap-2 mb-3">
+                <h4 className="text-sm font-semibold">
+                  Дополнительные параметры
+                </h4>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8">
+                    <ChevronsUpDown />
+                    <span className="sr-only">Toggle</span>
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="roundingDecimals"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Знаки после запятой
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="2"
+                            value={field.value ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(
+                                value === "" ? undefined : Number(value)
+                              );
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="dayCountBasis"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>База расчета дней</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <SelectTrigger>
+                            <FormControl>
+                              <SelectValue />
+                            </FormControl>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ACTUAL_365">
+                              365 дней в году
+                            </SelectItem>
+                            <SelectItem value="ACTUAL_360">
+                              360 дней в году
+                            </SelectItem>
+                            <SelectItem value="ACTUAL_ACTUAL">
+                              Фактические дни
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="space-y-3">
                     <FormField
                       control={form.control}
-                      name="loanTerm"
+                      name="interestOnlyFirstPeriod"
                       render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem className="flex items-center gap-2">
                           <FormControl>
-                            <Input type="number" placeholder="12" {...field} />
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
                           </FormControl>
-                          <FormDescription hidden={true}>
-                            Введите срок кредита (число)
-                          </FormDescription>
-                          <FormMessage />
+                          <FormLabel className="text-sm">Первый месяц проценты</FormLabel>
                         </FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
-                      name="loanTermType"
+                      name="moveHolidayToNextDay"
                       render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <SelectTrigger>
-                              <FormControl>
-                                <SelectValue />
-                              </FormControl>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="y">лет</SelectItem>
-                              <SelectItem value="m">месяцев</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormDescription hidden={true}>
-                            Выберите единицу измерения срока (месяцев или лет)
-                          </FormDescription>
-                          <FormMessage />
+                        <FormItem className="flex items-center gap-2">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm">
+                            Перенос выходных
+                          </FormLabel>
                         </FormItem>
                       )}
                     />
                   </div>
                 </div>
-                <FormField
-                  control={form.control}
-                  name="interestRate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Процентная ставка</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="10" {...field} />
-                      </FormControl>
-                      <FormDescription hidden={true}>
-                        Введите процентную ставку в процентах
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="loanType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Тип платежа</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <SelectTrigger>
-                          <FormControl>
-                            <SelectValue />
-                          </FormControl>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ANNUITY">Аннуитетный</SelectItem>
-                          <SelectItem value="AMORTIZATION">
-                            Дифференцированный
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription hidden={true}>
-                        Выберите тип платежа кредита
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="issueDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Дата выдачи кредита</FormLabel>
-                      <FormControl>
-                        <DatePickerNew
-                          key={field.value ? field.value.toISOString() : "none"}
-                          onDateChange={field.onChange}
-                          defaultDate={field.value}
-                        />
-                      </FormControl>
-                      <FormDescription hidden={true}>
-                        Введите дату выдачи кредита
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="paymentDayNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>День первого платежа</FormLabel>
-                      <FormControl>
-                          <Input type="number" placeholder="20" {...field} />
-                      </FormControl>
-                      <FormDescription hidden={true}>
-                        Введите день первого платежа
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Collapsible className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center gap-2">
-                    <h4 className="text-sm font-semibold">
-                      Дополнительные параметры
-                    </h4>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="icon" className="size-8">
-                        <ChevronsUpDown />
-                        <span className="sr-only">Toggle</span>
-                      </Button>
-                    </CollapsibleTrigger>
-                  </div>
-                  <CollapsibleContent>
-                    <div className="flex flex-1 flex-col gap-2">
-                      <FormField
-                        control={form.control}
-                        name="roundingDecimals"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              Количество знаков после запятой
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                placeholder="2"
-                                value={field.value ?? ""}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  field.onChange(
-                                    value === "" ? undefined : Number(value)
-                                  );
-                                }}
-                              />
-                            </FormControl>
-                            <FormDescription hidden={true}>
-                              Введите количество знаков после запятой для
-                              округления суммы платежа
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="dayCountBasis"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>База расчета дней в году</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <SelectTrigger>
-                                <FormControl>
-                                  <SelectValue />
-                                </FormControl>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="ACTUAL_365">
-                                  365 дней в году
-                                </SelectItem>
-                                <SelectItem value="ACTUAL_360">
-                                  360 дней в году
-                                </SelectItem>
-                                <SelectItem value="ACTUAL_ACTUAL">
-                                  Фактические дни
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormDescription hidden={true}>
-                              Выберите базу расчета дней в году
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="interestOnlyFirstPeriod"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center gap-2">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                            <FormLabel>Первый месяц проценты</FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="moveHolidayToNextDay"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center gap-2">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                            <FormLabel>
-                              Перенос выходных на следующий рабочий день
-                            </FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+              </CollapsibleContent>
+            </Collapsible>
 
-                <Button type="submit">Рассчитать</Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
+            {/* Кнопка расчета */}
+            <div className="text-center">
+              <Button type="submit" size="lg" className="px-8">
+                Рассчитать кредит
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   );
 }

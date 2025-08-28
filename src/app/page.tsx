@@ -5,7 +5,7 @@ import { LoanScheduleEntry, generateLoanSchedule } from "@/lib/loan-lib";
 import { useState } from "react";
 import { LoanInputForm } from "../types/loan-input-form.type";
 import { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
+import { differenceInMonths, format } from "date-fns";
 import dynamic from "next/dynamic";
 import {
   ChartConfig,
@@ -15,7 +15,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { Area, AreaChart, XAxis, CartesianGrid } from "recharts";
+import { Area, AreaChart, XAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import {
   Card,
   CardContent,
@@ -23,6 +23,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { CalendarIcon, BarChart3Icon, CalculatorIcon } from "lucide-react";
 
 const LoanInputCard = dynamic(() => import("./loan-input-card"), {
   ssr: false,
@@ -35,6 +46,14 @@ interface LoanScheduleRow {
   principalAmount: string;
   interestAmount: string;
   remainingPrincipal: string;
+}
+
+interface LoanSummary {
+  totalPayments: number;
+  totalPrincipal: number;
+  totalInterest: number;
+  loanTerm: string;
+  monthlyPayment: number;
 }
 
 const columns: ColumnDef<LoanScheduleRow>[] = [
@@ -75,14 +94,19 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+const COLORS = ["#10b981", "#60a5fa"];
+
 export default function Page() {
   const [data, setData] = useState<LoanScheduleEntry[]>([]);
+  const [summary, setSummary] = useState<LoanSummary | null>(null);
   const [roundingDecimals, setRoundingDecimals] = useState(2);
   const [isLoading, setIsLoading] = useState(false);
+  const [isChartOpen, setIsChartOpen] = useState(false);
 
   function onFormSubmit(form: LoanInputForm) {
     setIsLoading(true);
     setData([]);
+    setSummary(null);
     
     // Имитируем небольшую задержку для визуального эффекта
     setTimeout(() => {
@@ -90,146 +114,328 @@ export default function Page() {
         ...form,
         termMonths: form.loanTerm * (form.loanTermType === "y" ? 12 : 1),
         principal: form.loanAmount,
-        annualInterestRatePercent: form.interestRate
+        annualInterestRatePercent: form.interestRate,
+        earlyRepayments: form.earlyRepayments
       });
+      
       setData(schedule);
-      setRoundingDecimals(form.roundingDecimals);
+      setRoundingDecimals(form.roundingDecimals || 2);
+      
+      // Вычисляем сводку по кредиту
+      const totalPayments = schedule.reduce((sum, item) => sum + item.paymentAmount, 0);
+      const totalPrincipal = schedule.reduce((sum, item) => sum + item.principalAmount, 0);
+      const totalInterest = schedule.reduce((sum, item) => sum + item.interestAmount, 0);
+      
+      const months = differenceInMonths(schedule[schedule.length - 1].paymentDate, schedule[0].paymentDate);
+      const years = Math.floor(months / 12);
+      const remainingMonths = months % 12;
+      
+      let loanTerm = "";
+      if (years > 0) {
+        loanTerm += `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
+      }
+      if (remainingMonths > 0) {
+        if (loanTerm) loanTerm += " ";
+        loanTerm += `${remainingMonths} ${remainingMonths === 1 ? 'месяц' : remainingMonths < 5 ? 'месяца' : 'месяцев'}`;
+      }
+      
+      const monthlyPayment = schedule.length > 1 ? schedule[1].paymentAmount : schedule[0].paymentAmount;
+      
+      setSummary({
+        totalPayments,
+        totalPrincipal,
+        totalInterest,
+        loanTerm,
+        monthlyPayment
+      });
+      
       setIsLoading(false);
     }, 200);
   }
-  return (
-    <div className="w-full h-full flex items-start justify-start mt-10 gap-8">
-      <div className="ml-10">
-        <LoanInputCard onFormSubmit={onFormSubmit} />
-      </div>
-      <div className="flex flex-col gap-4 w-full items-stretch mr-10">
-        <Card className={data.length > 0 ? "h-116" : "h-auto"}>
-          <CardHeader>
-            <CardTitle className="text-center">Таблица платежей</CardTitle>
-          </CardHeader>
-          <CardContent className={data.length > 0 ? "h-100 overflow-auto" : ""}>
-            {isLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="text-muted-foreground">Расчёт...</div>
-              </div>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={data.map((item, index) => ({
-                  month: index + 1,
-                  paymentDate: format(item.paymentDate, "dd.MM.yyyy"),
-                  paymentAmount: item.paymentAmount.toFixed(roundingDecimals),
-                  principalAmount: item.principalAmount.toFixed(roundingDecimals),
-                  interestAmount: item.interestAmount.toFixed(roundingDecimals),
-                  remainingPrincipal:
-                    item.remainingPrincipal.toFixed(roundingDecimals),
-                }))}
-              />
-            )}
-          </CardContent>
-        </Card>
 
-        {data.length > 0 && (
-          <Card className="pt-0">
-            <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
-              <div className="grid flex-1 gap-1">
-                <CardTitle className="text-center">График платежей</CardTitle>
+  const pieChartData = summary ? [
+    { name: "Основной долг", value: summary.totalPrincipal },
+    { name: "Проценты", value: summary.totalInterest }
+  ] : [];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Заголовок */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+            Кредитный калькулятор
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 text-lg">
+            Рассчитайте график платежей и проанализируйте условия кредита
+          </p>
+        </div>
+
+        {/* Форма калькулятора - расширенная по горизонтали */}
+        <div className="mb-8">
+          <LoanInputCard onFormSubmit={onFormSubmit} />
+        </div>
+
+        {/* Результаты - под формой */}
+        {isLoading && (
+          <Card className="mb-6">
+            <CardContent className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <div className="text-muted-foreground">Выполняется расчёт...</div>
               </div>
-            </CardHeader>
-            <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-              <ChartContainer
-                config={chartConfig}
-                className="aspect-auto h-[250px] w-full"
-              >
-                <AreaChart
-                  data={data.map((value, index) => ({
-                    paymentDate: value.paymentDate,
-                    paymentAmount: Number(
-                      value.paymentAmount.toFixed(roundingDecimals)
-                    ),
-                    interestAmount: Number(
-                      value.interestAmount.toFixed(roundingDecimals)
-                    ),
-                  }))}
-                >
-                  <defs>
-                    <linearGradient
-                      id="fillPaymentAmount"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                      <stop
-                        offset="95%"
-                        stopColor="#10b981"
-                        stopOpacity={0.1}
-                      />
-                    </linearGradient>
-                    <linearGradient
-                      id="fillInterestAmount"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.8} />
-                      <stop
-                        offset="95%"
-                        stopColor="#60a5fa"
-                        stopOpacity={0.1}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="paymentDate"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    minTickGap={32}
-                    tickFormatter={(value) => {
-                      const date = new Date(value);
-                      return date.toLocaleDateString(undefined, {
-                        month: "short",
-                        year: "numeric",
-                      });
-                    }}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelFormatter={(value) => {
-                          return new Date(value).toLocaleDateString(undefined, {
-                            month: "long",
-                            year: "numeric",
-                            day: "numeric",
-                          });
-                        }}
-                        indicator="dot"
-                      />
-                    }
-                    cursor={false}
-                    defaultIndex={1}
-                  />
-                  <Area
-                    dataKey="paymentAmount"
-                    type="linear"
-                    fill="url(#fillPaymentAmount)"
-                    stroke="#10b981"
-                  />
-                  <Area
-                    dataKey="interestAmount"
-                    type="linear"
-                    fill="url(#fillInterestAmount)"
-                    stroke="#60a5fa"
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                </AreaChart>
-              </ChartContainer>
             </CardContent>
           </Card>
+        )}
+
+        {summary && (
+          <div className="space-y-6">
+            {/* Графики и таблица в сетке */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Круговая диаграмма */}
+              <Card className="order-2 lg:order-1">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3Icon className="h-5 w-5" />
+                    Структура платежей
+                  </CardTitle>
+                  <CardDescription>
+                    Распределение общей суммы по основному долгу и процентам
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-center">
+                    <PieChart width={250} height={250}>
+                      <Pie
+                        data={pieChartData}
+                        cx={125}
+                        cy={125}
+                        labelLine={false}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {pieChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </div>
+                  
+                  {/* Легенда с процентами */}
+                  <div className="mt-6 space-y-3">
+                    {pieChartData.map((entry, index) => {
+                      const percentage = ((entry.value / (summary.totalPrincipal + summary.totalInterest)) * 100).toFixed(1);
+                      return (
+                        <div key={entry.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="w-4 h-4 rounded" 
+                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                            ></div>
+                            <span className="text-sm font-medium">{entry.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold">
+                              {entry.value.toLocaleString('ru-RU', { 
+                                minimumFractionDigits: 2, 
+                                maximumFractionDigits: 2 
+                              })}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{percentage}%</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Сводка по кредиту с кнопкой графика */}
+              <Card className="order-1 lg:order-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CalculatorIcon className="h-5 w-5" />
+                    Сводка по кредиту
+                  </CardTitle>
+                  <CardDescription>
+                    Основные показатели кредита
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {summary.totalPayments.toLocaleString('ru-RU', { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                        })}
+                      </div>
+                      <div className="text-xs text-blue-600 dark:text-blue-400">Общая сумма</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                      <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                        {summary.totalPrincipal.toLocaleString('ru-RU', { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                        })}
+                      </div>
+                      <div className="text-xs text-green-600 dark:text-green-400">Основной долг</div>
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                      <div className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                        {summary.totalInterest.toLocaleString('ru-RU', { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                        })}
+                      </div>
+                      <div className="text-xs text-orange-600 dark:text-orange-400">Проценты</div>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                      <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                        {summary.monthlyPayment.toLocaleString('ru-RU', { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                        })}
+                      </div>
+                      <div className="text-xs text-purple-600 dark:text-purple-400">Ежемесячный платёж</div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center mb-4">
+                    <Badge variant="secondary" className="text-base px-3 py-1">
+                      Срок кредита: {summary.loanTerm}
+                    </Badge>
+                  </div>
+
+                  {/* Кнопка графика платежей */}
+                  <Dialog open={isChartOpen} onOpenChange={setIsChartOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full" variant="outline" onClick={() => setIsChartOpen(true)}>
+                        <BarChart3Icon className="h-4 w-4 mr-2" />
+                        Открыть график платежей
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                      <DialogHeader>
+                        <DialogTitle>График платежей</DialogTitle>
+                      </DialogHeader>
+                      <div className="mt-4">
+                        <ChartContainer
+                          config={chartConfig}
+                          className="aspect-auto h-[400px] w-full"
+                        >
+                          <AreaChart
+                            data={data.map((value, index) => ({
+                              paymentDate: value.paymentDate,
+                              paymentAmount: Number(
+                                value.paymentAmount.toFixed(roundingDecimals)
+                              ),
+                              interestAmount: Number(
+                                value.interestAmount.toFixed(roundingDecimals)
+                              ),
+                            }))}
+                          >
+                            <defs>
+                              <linearGradient
+                                id="fillPaymentAmount"
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
+                              >
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
+                              </linearGradient>
+                              <linearGradient
+                                id="fillInterestAmount"
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
+                              >
+                                <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.8} />
+                                <stop offset="95%" stopColor="#60a5fa" stopOpacity={0.1} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid vertical={false} />
+                            <XAxis
+                              dataKey="paymentDate"
+                              tickLine={false}
+                              axisLine={false}
+                              tickMargin={8}
+                              minTickGap={32}
+                              tickFormatter={(value) => {
+                                const date = new Date(value);
+                                return date.toLocaleDateString('ru-RU', {
+                                  month: "short",
+                                  year: "numeric",
+                                });
+                              }}
+                            />
+                            <ChartTooltip
+                              content={
+                                <ChartTooltipContent
+                                  labelFormatter={(value) => {
+                                    return new Date(value).toLocaleDateString('ru-RU', {
+                                      month: "long",
+                                      year: "numeric",
+                                      day: "numeric",
+                                    });
+                                  }}
+                                  indicator="dot"
+                                />
+                              }
+                              cursor={false}
+                              defaultIndex={1}
+                            />
+                            <Area
+                              dataKey="paymentAmount"
+                              type="linear"
+                              fill="url(#fillPaymentAmount)"
+                              stroke="#10b981"
+                            />
+                            <Area
+                              dataKey="interestAmount"
+                              type="linear"
+                              fill="url(#fillInterestAmount)"
+                              stroke="#60a5fa"
+                            />
+                            <ChartLegend content={<ChartLegendContent />} />
+                          </AreaChart>
+                        </ChartContainer>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Таблица платежей */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Таблица платежей</CardTitle>
+                <CardDescription>
+                  Детальный график платежей по кредиту
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-96 overflow-auto">
+                  <DataTable
+                    columns={columns}
+                    data={data.map((item, index) => ({
+                      month: index + 1,
+                      paymentDate: format(item.paymentDate, "dd.MM.yyyy"),
+                      paymentAmount: item.paymentAmount.toFixed(roundingDecimals),
+                      principalAmount: item.principalAmount.toFixed(roundingDecimals),
+                      interestAmount: item.interestAmount.toFixed(roundingDecimals),
+                      remainingPrincipal: item.remainingPrincipal.toFixed(roundingDecimals),
+                    }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     </div>

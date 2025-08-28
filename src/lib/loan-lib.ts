@@ -7,6 +7,14 @@ import {
   nextMonday,
 } from "date-fns";
 
+export interface EarlyRepaymentParams {
+  earlyRepaymentDateStart?: Date | string;
+  earlyRepaymentDateEnd?: Date | string;
+  periodicity?: "ONCE" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+  earlyRepaymentAmount?: number;
+  repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
+}
+
 export interface LoanScheduleParams {
   principal: number;
   annualInterestRatePercent: number;
@@ -19,13 +27,7 @@ export interface LoanScheduleParams {
   dayCountBasis?: "ACTUAL_365" | "ACTUAL_360" | "ACTUAL_ACTUAL";
   /** Number of fractional digits to round monetary amounts to. Defaults to 2. */
   roundingDecimals?: number;
-  earlyRepayments?: {
-    earlyRepaymentDateStart?: Date | string;
-    earlyRepaymentDateEnd?: Date | string;
-    periodicity?: "MONTHLY" | "QUARTERLY" | "YEARLY";
-    earlyRepaymentAmount?: number;
-    repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
-  }[];
+  earlyRepayments?: EarlyRepaymentParams[];
 }
 
 export interface LoanScheduleEntry {
