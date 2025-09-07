@@ -50,16 +50,6 @@ export default function LoanInputCard({
   onFormSubmit?: (data: LoanInputForm) => void;
 }) {
   const LOCAL_STORAGE_KEY = "loan-input-form-settings";
-  const [earlyRepayments, setEarlyRepayments] = useState<
-    Array<{
-      id: string;
-      earlyRepaymentDateStart?: Date;
-      earlyRepaymentDateEnd?: Date;
-      periodicity?: "ONCE" | "MONTHLY" | "QUARTERLY" | "YEARLY";
-      earlyRepaymentAmount?: number;
-      repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
-    }>
-  >([]);
 
   const schema = z
     .object({
@@ -92,7 +82,7 @@ export default function LoanInputCard({
         .int("Должно быть целым числом")
         .min(1, "Минимум 1")
         .max(31, "Максимум 31"),
-      earlyRepayments: z.array(earlyRepaymentSchema).optional(),
+      earlyRepayments: z.array(earlyRepaymentSchema),
     })
     .superRefine((val, ctx) => {
       if (!(val.issueDate instanceof Date) || isNaN(val.issueDate.getTime())) {
@@ -150,7 +140,14 @@ export default function LoanInputCard({
           : 20,
         interestOnlyFirstPeriod: Boolean(parsed.interestOnlyFirstPeriod),
         moveHolidayToNextDay: Boolean(parsed.moveHolidayToNextDay),
-        earlyRepayments: parsed.earlyRepayments || [],
+        earlyRepayments: (parsed.earlyRepayments || []).map((er: any) => ({
+          id: er.id || `er-${Date.now()}-${Math.random()}`,
+          earlyRepaymentDateStart: er.earlyRepaymentDateStart ? new Date(er.earlyRepaymentDateStart) : new Date(),
+          earlyRepaymentDateEnd: er.earlyRepaymentDateEnd ? new Date(er.earlyRepaymentDateEnd) : undefined,
+          periodicity: er.periodicity || "MONTHLY",
+          earlyRepaymentAmount: er.earlyRepaymentAmount || 0,
+          repaymentType: er.repaymentType || "DECREASE_PAYMENT",
+        })),
       };
     } catch (error) {
       console.warn("Failed to load saved loan settings, using defaults", error);
@@ -172,10 +169,10 @@ export default function LoanInputCard({
           JSON.stringify({
             ...value,
             issueDate: format(value.issueDate, "yyyy-MM-dd"),
-            earlyRepayments: earlyRepayments.map((er) => ({
+            earlyRepayments: (value.earlyRepayments || []).map((er) => ({
               id: er.id,
-              earlyRepaymentDateStart: format(er.earlyRepaymentDateStart, "yyyy-MM-dd"),
-              earlyRepaymentDateEnd: format(er.earlyRepaymentDateEnd, "yyyy-MM-dd"),
+              earlyRepaymentDateStart: er.earlyRepaymentDateStart ? format(er.earlyRepaymentDateStart, "yyyy-MM-dd") : undefined,
+              earlyRepaymentDateEnd: er.earlyRepaymentDateEnd ? format(er.earlyRepaymentDateEnd, "yyyy-MM-dd") : undefined,
               periodicity: er.periodicity,
               earlyRepaymentAmount: er.earlyRepaymentAmount,
               repaymentType: er.repaymentType,
@@ -187,71 +184,34 @@ export default function LoanInputCard({
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, earlyRepayments]);
+  }, [form]);
 
-  // Load early repayments from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.earlyRepayments && Array.isArray(parsed.earlyRepayments)) {
-          setEarlyRepayments(
-            parsed.earlyRepayments.map((er: any, index: number) => ({
-              id: er.id,
-              ...er,
-              earlyRepaymentAmount: er.earlyRepaymentAmount,
-              earlyRepaymentDateStart: er.earlyRepaymentDateStart
-                ? new Date(er.earlyRepaymentDateStart)
-                : undefined,
-              earlyRepaymentDateEnd: er.earlyRepaymentDateEnd
-                ? new Date(er.earlyRepaymentDateEnd)
-                : undefined,
-            }))
-          );
-        }
-      }
-    } catch (error) {
-      console.warn("Failed to load early repayments", error);
-    }
-  }, []);
 
   const addEarlyRepayment = () => {
     const newId = `er-${Date.now()}`;
-    setEarlyRepayments([
-      ...earlyRepayments,
+    const currentEarlyRepayments = form.getValues("earlyRepayments") || [];
+    form.setValue("earlyRepayments", [
+      ...currentEarlyRepayments,
       {
         id: newId,
-        periodicity: "MONTHLY",
-        repaymentType: "DECREASE_PAYMENT",
+        earlyRepaymentDateStart: new Date(),
+        periodicity: "MONTHLY" as const,
+        repaymentType: "DECREASE_PAYMENT" as const,
+        earlyRepaymentAmount: 0,
       },
     ]);
   };
 
   const removeEarlyRepayment = (id: string) => {
-    setEarlyRepayments(earlyRepayments.filter((er) => er.id !== id));
-  };
-
-  const updateEarlyRepayment = (id: string, field: string, value: any) => {
-    setEarlyRepayments(
-      earlyRepayments.map((er) =>
-        er.id === id ? { ...er, [field]: value } : er
-      )
+    const currentEarlyRepayments = form.getValues("earlyRepayments") || [];
+    form.setValue(
+      "earlyRepayments",
+      currentEarlyRepayments.filter((er) => er.id !== id)
     );
   };
 
   function onSubmit(data: LoanInputForm) {
-    const formData = {
-      ...data,
-      earlyRepayments: earlyRepayments.map((er) => ({
-        earlyRepaymentDateStart: er.earlyRepaymentDateStart,
-        earlyRepaymentDateEnd: er.earlyRepaymentDateEnd,
-        periodicity: er.periodicity,
-        earlyRepaymentAmount: er.earlyRepaymentAmount,
-        repaymentType: er.repaymentType,
-      })),
-    };
-    onFormSubmit?.(formData);
+    onFormSubmit?.(data);
   }
 
   return (
@@ -408,7 +368,7 @@ export default function LoanInputCard({
               </div>
               <CollapsibleContent>
                 <div className="space-y-4">
-                  {earlyRepayments.map((er) => (
+                  {form.watch("earlyRepayments")?.map((er, index) => (
                     <div
                       key={er.id}
                       className="p-4 border rounded-lg space-y-4"
@@ -429,114 +389,129 @@ export default function LoanInputCard({
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs text-muted-foreground">
-                            Дата начала
-                          </label>
-                          <Input
-                            type="date"
-                            value={er.earlyRepaymentDateStart ? format(er.earlyRepaymentDateStart, "yyyy-MM-dd") : ""}
-                            onChange={(e) =>
-                              updateEarlyRepayment(
-                                er.id,
-                                "earlyRepaymentDateStart",
-                                e.target.valueAsDate
-                              )
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">
-                            Дата окончания
-                          </label>
-                          <Input
-                            type="date"
-                            value={er.earlyRepaymentDateEnd ? format(er.earlyRepaymentDateEnd, "yyyy-MM-dd") : ""}
-                            onChange={(e) =>
-                              updateEarlyRepayment(
-                                er.id,
-                                "earlyRepaymentDateEnd",
-                                e.target.valueAsDate
-                              )
-                            }
-                          />
-                        </div>
+                        <FormField
+                          control={form.control}
+                          name={`earlyRepayments.${index}.earlyRepaymentDateStart`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Дата начала
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="date"
+                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                                  onChange={(e) => field.onChange(e.target.valueAsDate)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`earlyRepayments.${index}.earlyRepaymentDateEnd`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Дата окончания
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="date"
+                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                                  onChange={(e) => field.onChange(e.target.valueAsDate)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="text-xs text-muted-foreground">
-                            Периодичность
-                          </label>
-                          <Select
-                            value={er.periodicity}
-                            defaultValue="ONCE"
-                            onValueChange={(value) =>
-                              updateEarlyRepayment(er.id, "periodicity", value)
-                            }
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="ONCE">Один раз</SelectItem>
-                              <SelectItem value="MONTHLY">
-                                Ежемесячно
-                              </SelectItem>
-                              <SelectItem value="QUARTERLY">
-                                Ежеквартально
-                              </SelectItem>
-                              <SelectItem value="YEARLY">Ежегодно</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">
-                            Тип погашения
-                          </label>
-                          <Select
-                            value={er.repaymentType}
-                            defaultValue="DECREASE_TERM"
-                            onValueChange={(value) =>
-                              updateEarlyRepayment(
-                                er.id,
-                                "repaymentType",
-                                value
-                              )
-                            }
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="DECREASE_PAYMENT">
-                                Уменьшение платежа
-                              </SelectItem>
-                              <SelectItem value="DECREASE_TERM">
-                                Уменьшение срока
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground">
-                            Сумма досрочного погашения
-                          </label>
-                          <Input
-                            type="number"
-                            placeholder="50000"
-                            defaultValue={er.earlyRepaymentAmount || ""}
-                            required
-                            onChange={(e) =>
-                              updateEarlyRepayment(
-                                er.id,
-                                "earlyRepaymentAmount",
-                                Number(e.target.value)
-                              )
-                            }
-                            className="h-9"
-                          />
-                        </div>
+                        <FormField
+                          control={form.control}
+                          name={`earlyRepayments.${index}.periodicity`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Периодичность
+                              </FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="ONCE">Один раз</SelectItem>
+                                  <SelectItem value="MONTHLY">
+                                    Ежемесячно
+                                  </SelectItem>
+                                  <SelectItem value="QUARTERLY">
+                                    Ежеквартально
+                                  </SelectItem>
+                                  <SelectItem value="YEARLY">Ежегодно</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`earlyRepayments.${index}.repaymentType`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Тип погашения
+                              </FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="DECREASE_PAYMENT">
+                                    Уменьшение платежа
+                                  </SelectItem>
+                                  <SelectItem value="DECREASE_TERM">
+                                    Уменьшение срока
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`earlyRepayments.${index}.earlyRepaymentAmount`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Сумма досрочного погашения
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  placeholder="50000"
+                                  {...field}
+                                  className="h-9"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
                     </div>
                   ))}

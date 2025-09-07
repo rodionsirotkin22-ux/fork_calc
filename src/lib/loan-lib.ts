@@ -133,6 +133,7 @@ export function generateLoanSchedule(params: LoanScheduleParams): {
   let remainingTermMonths = termMonths;
 
   while (remainingTermMonths > 0) {
+    sharedParams.remainingInterestAmount = 0;
     const nextEarlyRepayment = getNextEarlyRepayment(
       earlyRepaymentRecords,
       sharedParams.currentDate,
@@ -166,7 +167,6 @@ export function generateLoanSchedule(params: LoanScheduleParams): {
       sharedParams.nextDate,
       sharedParams.currentDate
     );
-    console.log("dayDifference", dayDifference);
     const { daysInYear } = getMonthDaysAndYearDays(
       sharedParams.nextDate,
       dayCountBasis
@@ -381,8 +381,8 @@ function getNextEarlyRepayment(
       }
 
       return (
-        currentDate.getTime() < earlyRepayment.earlyRepaymentDate.getTime() &&
-        nextDate.getTime() >= earlyRepayment.earlyRepaymentDate.getTime()
+        currentDate < earlyRepayment.earlyRepaymentDate &&
+        nextDate >= earlyRepayment.earlyRepaymentDate
       );
     })
     .sort(orderByDate);
