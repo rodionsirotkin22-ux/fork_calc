@@ -367,19 +367,7 @@ export default function LoanInputCard({
             {/* Досрочные погашения */}
             <Collapsible className="mb-6" defaultOpen>
               <div className="flex justify-between items-center gap-2 mb-3">
-                <div className="flex items-center gap-4">
-                  <h4 className="text-sm font-semibold">Досрочные погашения</h4>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addEarlyRepayment}
-                    // className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Добавить
-                  </Button>
-                </div>
+                <h4 className="text-sm font-semibold">Досрочные погашения</h4>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="icon" className="size-8">
                     <ChevronsUpDown />
