@@ -20,7 +20,6 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import { DatePickerNew } from "@/components/ui/date-picker-new";
 import {
   Collapsible,
   CollapsibleContent,
@@ -32,13 +31,17 @@ import { FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
+import { format } from "date-fns";
 
 const earlyRepaymentSchema = z.object({
-  earlyRepaymentDateStart: z.coerce.date().optional(),
+  id: z.string(),
+  earlyRepaymentDateStart: z.coerce.date(),
   earlyRepaymentDateEnd: z.coerce.date().optional(),
-  periodicity: z.enum(["ONCE", "MONTHLY", "QUARTERLY", "YEARLY"]).optional(),
-  earlyRepaymentAmount: z.coerce.number().positive("Сумма должна быть больше 0").optional(),
-  repaymentType: z.enum(["DECREASE_TERM", "DECREASE_PAYMENT"]).optional(),
+  periodicity: z.enum(["ONCE", "MONTHLY", "QUARTERLY", "YEARLY"]),
+  earlyRepaymentAmount: z.coerce
+    .number()
+    .positive("Сумма должна быть больше 0"),
+  repaymentType: z.enum(["DECREASE_TERM", "DECREASE_PAYMENT"])
 });
 
 export default function LoanInputCard({
@@ -47,14 +50,16 @@ export default function LoanInputCard({
   onFormSubmit?: (data: LoanInputForm) => void;
 }) {
   const LOCAL_STORAGE_KEY = "loan-input-form-settings";
-  const [earlyRepayments, setEarlyRepayments] = useState<Array<{
-    id: string;
-    earlyRepaymentDateStart?: Date;
-    earlyRepaymentDateEnd?: Date;
-    periodicity?: "ONCE" | "MONTHLY" | "QUARTERLY" | "YEARLY";
-    earlyRepaymentAmount?: number;
-    repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
-  }>>([]);
+  const [earlyRepayments, setEarlyRepayments] = useState<
+    Array<{
+      id: string;
+      earlyRepaymentDateStart?: Date;
+      earlyRepaymentDateEnd?: Date;
+      periodicity?: "ONCE" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+      earlyRepaymentAmount?: number;
+      repaymentType?: "DECREASE_TERM" | "DECREASE_PAYMENT";
+    }>
+  >([]);
 
   const schema = z
     .object({
@@ -82,13 +87,17 @@ export default function LoanInputCard({
         z.undefined(),
       ]),
       issueDate: z.coerce.date(),
-      paymentDayNumber: z.coerce.number().int("Должно быть целым числом").min(1, "Минимум 1").max(31, "Максимум 31"),
+      paymentDayNumber: z.coerce
+        .number()
+        .int("Должно быть целым числом")
+        .min(1, "Минимум 1")
+        .max(31, "Максимум 31"),
       earlyRepayments: z.array(earlyRepaymentSchema).optional(),
     })
     .superRefine((val, ctx) => {
       if (!(val.issueDate instanceof Date) || isNaN(val.issueDate.getTime())) {
         ctx.addIssue({
-          code: 'custom',
+          code: "custom",
           path: ["issueDate"],
           message: "Неверная дата",
         });
@@ -158,16 +167,21 @@ export default function LoanInputCard({
   useEffect(() => {
     const subscription = form.watch((value) => {
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-          ...value,
-          earlyRepayments: earlyRepayments.map(er => ({
-            earlyRepaymentDateStart: er.earlyRepaymentDateStart,
-            earlyRepaymentDateEnd: er.earlyRepaymentDateEnd,
-            periodicity: er.periodicity,
-            earlyRepaymentAmount: er.earlyRepaymentAmount,
-            repaymentType: er.repaymentType,
-          }))
-        }));
+        localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({
+            ...value,
+            issueDate: format(value.issueDate, "yyyy-MM-dd"),
+            earlyRepayments: earlyRepayments.map((er) => ({
+              id: er.id,
+              earlyRepaymentDateStart: format(er.earlyRepaymentDateStart, "yyyy-MM-dd"),
+              earlyRepaymentDateEnd: format(er.earlyRepaymentDateEnd, "yyyy-MM-dd"),
+              periodicity: er.periodicity,
+              earlyRepaymentAmount: er.earlyRepaymentAmount,
+              repaymentType: er.repaymentType,
+            })),
+          })
+        );
       } catch (error) {
         console.warn("Failed to save loan settings", error);
       }
@@ -182,12 +196,19 @@ export default function LoanInputCard({
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.earlyRepayments && Array.isArray(parsed.earlyRepayments)) {
-          setEarlyRepayments(parsed.earlyRepayments.map((er: any, index: number) => ({
-            id: `er-${index}`,
-            ...er,
-            earlyRepaymentDateStart: er.earlyRepaymentDateStart ? new Date(er.earlyRepaymentDateStart) : undefined,
-            earlyRepaymentDateEnd: er.earlyRepaymentDateEnd ? new Date(er.earlyRepaymentDateEnd) : undefined,
-          })));
+          setEarlyRepayments(
+            parsed.earlyRepayments.map((er: any, index: number) => ({
+              id: er.id,
+              ...er,
+              earlyRepaymentAmount: er.earlyRepaymentAmount,
+              earlyRepaymentDateStart: er.earlyRepaymentDateStart
+                ? new Date(er.earlyRepaymentDateStart)
+                : undefined,
+              earlyRepaymentDateEnd: er.earlyRepaymentDateEnd
+                ? new Date(er.earlyRepaymentDateEnd)
+                : undefined,
+            }))
+          );
         }
       }
     } catch (error) {
@@ -197,33 +218,38 @@ export default function LoanInputCard({
 
   const addEarlyRepayment = () => {
     const newId = `er-${Date.now()}`;
-    setEarlyRepayments([...earlyRepayments, {
-      id: newId,
-      periodicity: "MONTHLY",
-      repaymentType: "DECREASE_PAYMENT",
-    }]);
+    setEarlyRepayments([
+      ...earlyRepayments,
+      {
+        id: newId,
+        periodicity: "MONTHLY",
+        repaymentType: "DECREASE_PAYMENT",
+      },
+    ]);
   };
 
   const removeEarlyRepayment = (id: string) => {
-    setEarlyRepayments(earlyRepayments.filter(er => er.id !== id));
+    setEarlyRepayments(earlyRepayments.filter((er) => er.id !== id));
   };
 
   const updateEarlyRepayment = (id: string, field: string, value: any) => {
-    setEarlyRepayments(earlyRepayments.map(er => 
-      er.id === id ? { ...er, [field]: value } : er
-    ));
+    setEarlyRepayments(
+      earlyRepayments.map((er) =>
+        er.id === id ? { ...er, [field]: value } : er
+      )
+    );
   };
 
   function onSubmit(data: LoanInputForm) {
     const formData = {
       ...data,
-      earlyRepayments: earlyRepayments.map(er => ({
+      earlyRepayments: earlyRepayments.map((er) => ({
         earlyRepaymentDateStart: er.earlyRepaymentDateStart,
         earlyRepaymentDateEnd: er.earlyRepaymentDateEnd,
         periodicity: er.periodicity,
         earlyRepaymentAmount: er.earlyRepaymentAmount,
         repaymentType: er.repaymentType,
-      }))
+      })),
     };
     onFormSubmit?.(formData);
   }
@@ -343,10 +369,10 @@ export default function LoanInputCard({
                   <FormItem>
                     <FormLabel>Дата выдачи кредита</FormLabel>
                     <FormControl>
-                      <DatePickerNew
-                        key={field.value ? field.value.toISOString() : "none"}
-                        onDateChange={field.onChange}
-                        defaultDate={field.value}
+                      <Input
+                        type="date"
+                        value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -361,7 +387,7 @@ export default function LoanInputCard({
                   <FormItem>
                     <FormLabel>День платежа</FormLabel>
                     <FormControl>
-                        <Input type="number" placeholder="20" {...field} />
+                      <Input type="number" placeholder="20" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -372,9 +398,7 @@ export default function LoanInputCard({
             {/* Досрочные погашения */}
             <Collapsible className="mb-6" defaultOpen>
               <div className="flex justify-between items-center gap-2 mb-3">
-                <h4 className="text-sm font-semibold">
-                  Досрочные погашения
-                </h4>
+                <h4 className="text-sm font-semibold">Досрочные погашения</h4>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="icon" className="size-8">
                     <ChevronsUpDown />
@@ -385,9 +409,14 @@ export default function LoanInputCard({
               <CollapsibleContent>
                 <div className="space-y-4">
                   {earlyRepayments.map((er) => (
-                    <div key={er.id} className="p-4 border rounded-lg space-y-4">
+                    <div
+                      key={er.id}
+                      className="p-4 border rounded-lg space-y-4"
+                    >
                       <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Досрочное погашение</span>
+                        <span className="text-sm font-medium">
+                          Досрочное погашение
+                        </span>
                         <Button
                           type="button"
                           variant="ghost"
@@ -398,71 +427,120 @@ export default function LoanInputCard({
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="text-xs text-muted-foreground">Дата начала</label>
-                          <DatePickerNew
-                            onDateChange={(date) => updateEarlyRepayment(er.id, 'earlyRepaymentDateStart', date)}
-                            defaultDate={er.earlyRepaymentDateStart}
+                          <label className="text-xs text-muted-foreground">
+                            Дата начала
+                          </label>
+                          <Input
+                            type="date"
+                            value={er.earlyRepaymentDateStart ? format(er.earlyRepaymentDateStart, "yyyy-MM-dd") : ""}
+                            onChange={(e) =>
+                              updateEarlyRepayment(
+                                er.id,
+                                "earlyRepaymentDateStart",
+                                e.target.valueAsDate
+                              )
+                            }
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-muted-foreground">Дата окончания</label>
-                          <DatePickerNew
-                            onDateChange={(date) => updateEarlyRepayment(er.id, 'earlyRepaymentDateEnd', date)}
-                            defaultDate={er.earlyRepaymentDateEnd}
+                          <label className="text-xs text-muted-foreground">
+                            Дата окончания
+                          </label>
+                          <Input
+                            type="date"
+                            value={er.earlyRepaymentDateEnd ? format(er.earlyRepaymentDateEnd, "yyyy-MM-dd") : ""}
+                            onChange={(e) =>
+                              updateEarlyRepayment(
+                                er.id,
+                                "earlyRepaymentDateEnd",
+                                e.target.valueAsDate
+                              )
+                            }
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <label className="text-xs text-muted-foreground">Периодичность</label>
+                          <label className="text-xs text-muted-foreground">
+                            Периодичность
+                          </label>
                           <Select
                             value={er.periodicity}
-                            onValueChange={(value) => updateEarlyRepayment(er.id, 'periodicity', value)}
+                            defaultValue="ONCE"
+                            onValueChange={(value) =>
+                              updateEarlyRepayment(er.id, "periodicity", value)
+                            }
                           >
                             <SelectTrigger className="h-9">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="ONCE">Один раз</SelectItem>
-                              <SelectItem value="MONTHLY">Ежемесячно</SelectItem>
-                              <SelectItem value="QUARTERLY">Ежеквартально</SelectItem>
+                              <SelectItem value="MONTHLY">
+                                Ежемесячно
+                              </SelectItem>
+                              <SelectItem value="QUARTERLY">
+                                Ежеквартально
+                              </SelectItem>
                               <SelectItem value="YEARLY">Ежегодно</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <label className="text-xs text-muted-foreground">Тип погашения</label>
+                          <label className="text-xs text-muted-foreground">
+                            Тип погашения
+                          </label>
                           <Select
                             value={er.repaymentType}
-                            onValueChange={(value) => updateEarlyRepayment(er.id, 'repaymentType', value)}
+                            defaultValue="DECREASE_TERM"
+                            onValueChange={(value) =>
+                              updateEarlyRepayment(
+                                er.id,
+                                "repaymentType",
+                                value
+                              )
+                            }
                           >
                             <SelectTrigger className="h-9">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="DECREASE_PAYMENT">Уменьшение платежа</SelectItem>
-                              <SelectItem value="DECREASE_TERM">Уменьшение срока</SelectItem>
+                              <SelectItem value="DECREASE_PAYMENT">
+                                Уменьшение платежа
+                              </SelectItem>
+                              <SelectItem value="DECREASE_TERM">
+                                Уменьшение срока
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <label className="text-xs text-muted-foreground">Сумма досрочного погашения</label>
+                          <label className="text-xs text-muted-foreground">
+                            Сумма досрочного погашения
+                          </label>
                           <Input
                             type="number"
                             placeholder="50000"
-                            value={er.earlyRepaymentAmount || ""}
-                            onChange={(e) => updateEarlyRepayment(er.id, 'earlyRepaymentAmount', Number(e.target.value))}
+                            defaultValue={er.earlyRepaymentAmount || ""}
+                            required
+                            onChange={(e) =>
+                              updateEarlyRepayment(
+                                er.id,
+                                "earlyRepaymentAmount",
+                                Number(e.target.value)
+                              )
+                            }
                             className="h-9"
                           />
                         </div>
                       </div>
                     </div>
                   ))}
-                  
+
                   <Button
                     type="button"
                     variant="outline"
@@ -491,15 +569,13 @@ export default function LoanInputCard({
                 </CollapsibleTrigger>
               </div>
               <CollapsibleContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="roundingDecimals"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>
-                          Знаки после запятой
-                        </FormLabel>
+                        <FormLabel>Знаки после запятой</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -548,7 +624,8 @@ export default function LoanInputCard({
                       </FormItem>
                     )}
                   />
-                  <div className="space-y-3">
+                </div>
+                <div className="space-y-3 mt-4">
                     <FormField
                       control={form.control}
                       name="interestOnlyFirstPeriod"
@@ -560,7 +637,9 @@ export default function LoanInputCard({
                               onCheckedChange={field.onChange}
                             />
                           </FormControl>
-                          <FormLabel className="text-sm">Первый месяц проценты</FormLabel>
+                          <FormLabel className="text-sm">
+                            Первый месяц проценты
+                          </FormLabel>
                         </FormItem>
                       )}
                     />
@@ -582,7 +661,6 @@ export default function LoanInputCard({
                       )}
                     />
                   </div>
-                </div>
               </CollapsibleContent>
             </Collapsible>
 

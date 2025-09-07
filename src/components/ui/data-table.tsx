@@ -4,6 +4,9 @@ import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
+  InitialTableState,
+  Row,
+  TableMeta,
   useReactTable,
 } from "@tanstack/react-table"
  
@@ -16,20 +19,29 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ScrollArea } from "./scroll-area"
+import { CSSProperties } from "react"
  
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  meta?: TableMeta<TData> & {
+    getRowStyles?: (row: Row<TData>) => CSSProperties
+  }
+  initialState?: InitialTableState
 }
  
 export function DataTable<TData, TValue>({
   columns,
   data,
+  meta,
+  initialState,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    meta,
+    initialState,
   })
  
   return (
@@ -60,6 +72,7 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  style={meta?.getRowStyles(row)} 
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

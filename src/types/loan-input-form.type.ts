@@ -11,7 +11,7 @@ export interface LoanInputForm {
     paymentDayNumber?: number;
     moveHolidayToNextDay?: boolean;
     earlyRepayments?: {
-        earlyRepaymentDateStart?: Date;
+        earlyRepaymentDateStart: Date;
         earlyRepaymentDateEnd?: Date;
         periodicity?: "ONCE" | "MONTHLY" | "QUARTERLY" | "YEARLY";
         earlyRepaymentAmount?: number;

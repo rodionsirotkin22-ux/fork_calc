@@ -2,9 +2,9 @@
 
 import { DataTable } from "@/components/ui/data-table";
 import { LoanScheduleEntry, generateLoanSchedule } from "@/lib/loan-lib";
-import { useState } from "react";
+import { CSSProperties, useState } from "react";
 import { LoanInputForm } from "../types/loan-input-form.type";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, Row } from "@tanstack/react-table";
 import { differenceInMonths, format } from "date-fns";
 import dynamic from "next/dynamic";
 import {
@@ -46,6 +46,7 @@ interface LoanScheduleRow {
   principalAmount: string;
   interestAmount: string;
   remainingPrincipal: string;
+  isEarlyRepayment: boolean;
 }
 
 interface LoanSummary {
@@ -110,7 +111,7 @@ export default function Page() {
     
     // Имитируем небольшую задержку для визуального эффекта
     setTimeout(() => {
-      const schedule = generateLoanSchedule({
+      const { schedule, startMonthlyPayment } = generateLoanSchedule({
         ...form,
         termMonths: form.loanTerm * (form.loanTermType === "y" ? 12 : 1),
         principal: form.loanAmount,
@@ -126,7 +127,7 @@ export default function Page() {
       const totalPrincipal = schedule.reduce((sum, item) => sum + item.principalAmount, 0);
       const totalInterest = schedule.reduce((sum, item) => sum + item.interestAmount, 0);
       
-      const months = differenceInMonths(schedule[schedule.length - 1].paymentDate, schedule[0].paymentDate);
+      const months = differenceInMonths(schedule[schedule.length - 1].paymentDate, schedule[0].paymentDate)+1;
       const years = Math.floor(months / 12);
       const remainingMonths = months % 12;
       
@@ -139,7 +140,7 @@ export default function Page() {
         loanTerm += `${remainingMonths} ${remainingMonths === 1 ? 'месяц' : remainingMonths < 5 ? 'месяца' : 'месяцев'}`;
       }
       
-      const monthlyPayment = schedule.length > 1 ? schedule[1].paymentAmount : schedule[0].paymentAmount;
+      const monthlyPayment = startMonthlyPayment;
       
       setSummary({
         totalPayments,
@@ -430,7 +431,13 @@ export default function Page() {
                       principalAmount: item.principalAmount.toFixed(roundingDecimals),
                       interestAmount: item.interestAmount.toFixed(roundingDecimals),
                       remainingPrincipal: item.remainingPrincipal.toFixed(roundingDecimals),
+                      isEarlyRepayment: item.isEarlyRepayment,
                     }))}
+                    meta={{
+                      getRowStyles: (row: Row<LoanScheduleRow>): CSSProperties => ({
+                        background: row.original.isEarlyRepayment ? "red" : "#111111",
+                      }),
+                    }}
                   />
                 </div>
               </CardContent>
