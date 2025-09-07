@@ -32,8 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { CalendarIcon, BarChart3Icon, CalculatorIcon } from "lucide-react";
+import { BarChart3Icon, CalculatorIcon } from "lucide-react";
 
 const LoanInputCard = dynamic(() => import("./loan-input-card"), {
   ssr: false,
@@ -327,7 +326,7 @@ export default function Page() {
                           className="aspect-auto h-[400px] w-full"
                         >
                           <AreaChart
-                            data={data.map((value, index) => ({
+                            data={data.map((value ) => ({
                               paymentDate: value.paymentDate,
                               paymentAmount: Number(
                                 value.paymentAmount.toFixed(roundingDecimals)
@@ -435,7 +434,7 @@ export default function Page() {
                     }))}
                     meta={{
                       getRowStyles: (row: Row<LoanScheduleRow>): CSSProperties => ({
-                        background: row.original.isEarlyRepayment ? "red" : "#111111",
+                        background: row.original.isEarlyRepayment ? "red" : undefined,
                       }),
                     }}
                   />

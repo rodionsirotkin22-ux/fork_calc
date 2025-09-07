@@ -163,6 +163,10 @@ export function generateLoanSchedule(params: LoanScheduleParams): {
       }
     }
 
+    if (sharedParams.remainingPrincipal <= 0) {
+      break;
+    }
+
     const dayDifference = differenceInCalendarDays(
       sharedParams.nextDate,
       sharedParams.currentDate
@@ -407,7 +411,7 @@ function applyEarlyRepayments(
   for (const earlyRepayment of orderedEarlyRepayments) {
     const result = applyEarlyRepayment(sharedParams, earlyRepayment);
     updatedSharedParams = result.updatedSharedParams;
-    loanSchedule.push(result.loanSchedule);
+    loanSchedule.push(...result.loanSchedule);
     if (updatedSharedParams.remainingPrincipal <= 0) {
       updatedSharedParams.remainingPrincipal = 0;
       break;
@@ -433,12 +437,20 @@ function applyEarlyRepayment(
   earlyRepayment: EarlyRepaymentRecord
 ): {
   updatedSharedParams: LoanCalcSharedParams;
-  loanSchedule: LoanScheduleEntry;
+  loanSchedule: LoanScheduleEntry[];
   deleteEarlyRepayment: boolean;
   updatedEarlyRepayment?: EarlyRepaymentRecord;
 } {
-  const updatedSharedParams = { ...sharedParams };
-  let loanSchedule: LoanScheduleEntry;
+  if (sharedParams.remainingPrincipal <= 0) {
+    return {
+      updatedSharedParams: sharedParams,
+      loanSchedule: [],
+      deleteEarlyRepayment: false,
+    };
+  }
+
+  let updatedSharedParams = { ...sharedParams };
+  const loanSchedule: LoanScheduleEntry[] = [];
   let deleteEarlyRepayment = false;
   let updatedEarlyRepayment = earlyRepayment;
 
@@ -463,14 +475,14 @@ function applyEarlyRepayment(
       sharedParams.roundingDecimals
     );
 
-    loanSchedule = {
+    loanSchedule.push({
       paymentDate: earlyRepayment.earlyRepaymentDate,
       paymentAmount: earlyRepayment.earlyRepaymentAmount,
       interestAmount: earlyRepayment.earlyRepaymentAmount,
       principalAmount: 0,
       remainingPrincipal: sharedParams.remainingPrincipal,
       isEarlyRepayment: true,
-    };
+    });
   } else {
     let paymentAmount = earlyRepayment.earlyRepaymentAmount;
     let principalAmount = roundDecimals(
@@ -489,14 +501,14 @@ function applyEarlyRepayment(
       paymentAmount = paymentAmount + updatedSharedParams.remainingPrincipal;
       updatedSharedParams.remainingPrincipal = 0;
     }
-    loanSchedule = {
+    loanSchedule.push({
       paymentDate: earlyRepayment.earlyRepaymentDate,
       paymentAmount,
       interestAmount,
       principalAmount,
       remainingPrincipal: updatedSharedParams.remainingPrincipal,
       isEarlyRepayment: true,
-    };
+    });
   }
 
   if (
@@ -545,6 +557,20 @@ function applyEarlyRepayment(
         12
       );
       break;
+  }
+  
+  if (
+    updatedEarlyRepayment &&
+    updatedEarlyRepayment.earlyRepaymentDate < updatedSharedParams.nextDate
+  ) {
+    const nextRepayment = applyEarlyRepayment(
+      updatedSharedParams,
+      updatedEarlyRepayment
+    );
+    loanSchedule.push(...nextRepayment.loanSchedule);
+    updatedSharedParams = nextRepayment.updatedSharedParams;
+    deleteEarlyRepayment = nextRepayment.deleteEarlyRepayment;
+    updatedEarlyRepayment = nextRepayment.updatedEarlyRepayment;
   }
 
   if (

@@ -41,7 +41,7 @@ const earlyRepaymentSchema = z.object({
   earlyRepaymentAmount: z.coerce
     .number()
     .positive("Сумма должна быть больше 0"),
-  repaymentType: z.enum(["DECREASE_TERM", "DECREASE_PAYMENT"])
+  repaymentType: z.enum(["DECREASE_TERM", "DECREASE_PAYMENT"]),
 });
 
 export default function LoanInputCard({
@@ -142,8 +142,12 @@ export default function LoanInputCard({
         moveHolidayToNextDay: Boolean(parsed.moveHolidayToNextDay),
         earlyRepayments: (parsed.earlyRepayments || []).map((er: any) => ({
           id: er.id || `er-${Date.now()}-${Math.random()}`,
-          earlyRepaymentDateStart: er.earlyRepaymentDateStart ? new Date(er.earlyRepaymentDateStart) : new Date(),
-          earlyRepaymentDateEnd: er.earlyRepaymentDateEnd ? new Date(er.earlyRepaymentDateEnd) : undefined,
+          earlyRepaymentDateStart: er.earlyRepaymentDateStart
+            ? new Date(er.earlyRepaymentDateStart)
+            : new Date(),
+          earlyRepaymentDateEnd: er.earlyRepaymentDateEnd
+            ? new Date(er.earlyRepaymentDateEnd)
+            : undefined,
           periodicity: er.periodicity || "MONTHLY",
           earlyRepaymentAmount: er.earlyRepaymentAmount || 0,
           repaymentType: er.repaymentType || "DECREASE_PAYMENT",
@@ -171,8 +175,12 @@ export default function LoanInputCard({
             issueDate: format(value.issueDate, "yyyy-MM-dd"),
             earlyRepayments: (value.earlyRepayments || []).map((er) => ({
               id: er.id,
-              earlyRepaymentDateStart: er.earlyRepaymentDateStart ? format(er.earlyRepaymentDateStart, "yyyy-MM-dd") : undefined,
-              earlyRepaymentDateEnd: er.earlyRepaymentDateEnd ? format(er.earlyRepaymentDateEnd, "yyyy-MM-dd") : undefined,
+              earlyRepaymentDateStart: er.earlyRepaymentDateStart
+                ? format(er.earlyRepaymentDateStart, "yyyy-MM-dd")
+                : undefined,
+              earlyRepaymentDateEnd: er.earlyRepaymentDateEnd
+                ? format(er.earlyRepaymentDateEnd, "yyyy-MM-dd")
+                : undefined,
               periodicity: er.periodicity,
               earlyRepaymentAmount: er.earlyRepaymentAmount,
               repaymentType: er.repaymentType,
@@ -185,7 +193,6 @@ export default function LoanInputCard({
     });
     return () => subscription.unsubscribe();
   }, [form]);
-
 
   const addEarlyRepayment = () => {
     const newId = `er-${Date.now()}`;
@@ -331,7 +338,9 @@ export default function LoanInputCard({
                     <FormControl>
                       <Input
                         type="date"
-                        value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                        value={
+                          field.value ? format(field.value, "yyyy-MM-dd") : ""
+                        }
                         onChange={field.onChange}
                       />
                     </FormControl>
@@ -358,7 +367,19 @@ export default function LoanInputCard({
             {/* Досрочные погашения */}
             <Collapsible className="mb-6" defaultOpen>
               <div className="flex justify-between items-center gap-2 mb-3">
-                <h4 className="text-sm font-semibold">Досрочные погашения</h4>
+                <div className="flex items-center gap-4">
+                  <h4 className="text-sm font-semibold">Досрочные погашения</h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addEarlyRepayment}
+                    // className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить
+                  </Button>
+                </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="icon" className="size-8">
                     <ChevronsUpDown />
@@ -400,8 +421,14 @@ export default function LoanInputCard({
                               <FormControl>
                                 <Input
                                   type="date"
-                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-                                  onChange={(e) => field.onChange(e.target.valueAsDate)}
+                                  value={
+                                    field.value
+                                      ? format(field.value, "yyyy-MM-dd")
+                                      : ""
+                                  }
+                                  onChange={(e) =>
+                                    field.onChange(e.target.valueAsDate)
+                                  }
                                 />
                               </FormControl>
                               <FormMessage />
@@ -419,8 +446,14 @@ export default function LoanInputCard({
                               <FormControl>
                                 <Input
                                   type="date"
-                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-                                  onChange={(e) => field.onChange(e.target.valueAsDate)}
+                                  value={
+                                    field.value
+                                      ? format(field.value, "yyyy-MM-dd")
+                                      : ""
+                                  }
+                                  onChange={(e) =>
+                                    field.onChange(e.target.valueAsDate)
+                                  }
                                 />
                               </FormControl>
                               <FormMessage />
@@ -455,7 +488,9 @@ export default function LoanInputCard({
                                   <SelectItem value="QUARTERLY">
                                     Ежеквартально
                                   </SelectItem>
-                                  <SelectItem value="YEARLY">Ежегодно</SelectItem>
+                                  <SelectItem value="YEARLY">
+                                    Ежегодно
+                                  </SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -531,7 +566,7 @@ export default function LoanInputCard({
             </Collapsible>
 
             {/* Дополнительные параметры */}
-            <Collapsible className="mb-6">
+            <Collapsible className="mb-6" defaultOpen>
               <div className="flex justify-between items-center gap-2 mb-3">
                 <h4 className="text-sm font-semibold">
                   Дополнительные параметры
@@ -601,41 +636,41 @@ export default function LoanInputCard({
                   />
                 </div>
                 <div className="space-y-3 mt-4">
-                    <FormField
-                      control={form.control}
-                      name="interestOnlyFirstPeriod"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center gap-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm">
-                            Первый месяц проценты
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="moveHolidayToNextDay"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center gap-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm">
-                            Перенос выходных
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="interestOnlyFirstPeriod"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormLabel className="text-sm">
+                          Первый месяц проценты
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="moveHolidayToNextDay"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormLabel className="text-sm">
+                          Перенос выходных
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </CollapsibleContent>
             </Collapsible>
 
