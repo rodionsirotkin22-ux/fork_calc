@@ -246,15 +246,15 @@ export default function LoanInputCard({
               />
 
               <div className="space-y-2">
-                <FormLabel className="text-sm font-medium">
-                  Срок кредита
-                </FormLabel>
                 <div className="flex gap-2">
                   <FormField
                     control={form.control}
                     name="loanTerm"
                     render={({ field }) => (
                       <FormItem className="flex-1">
+                        <FormLabel className="text-sm font-medium">
+                          Срок кредита
+                        </FormLabel>
                         <FormControl>
                           <Input type="number" placeholder="12" {...field} />
                         </FormControl>
@@ -266,7 +266,10 @@ export default function LoanInputCard({
                     control={form.control}
                     name="loanTermType"
                     render={({ field }) => (
-                      <FormItem className="w-24">
+                      <FormItem className="w-24 mt-6">
+                        <FormLabel className="sr-only">
+                          Периодичность кредита
+                        </FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
@@ -278,7 +281,9 @@ export default function LoanInputCard({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="y">лет</SelectItem>
-                            <SelectItem value="m">мес.</SelectItem>
+                            <SelectItem value="m" aria-label="месяцев">
+                              мес.
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
