@@ -443,6 +443,25 @@ export default function Page() {
             </Card>
           </div>
         )}
+
+        {/* Футер */}
+        <footer className="mt-16 pt-8 border-t border-slate-200 dark:border-slate-700">
+          <div className="text-center text-sm text-slate-600 dark:text-slate-400">
+            <p className="mb-2">
+              © 2025 DimmKG. Лицензия AGPL-3.0
+            </p>
+            <p>
+              <a 
+                href="https://github.com/DimmKG/loan-calc" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors"
+              >
+                Исходный код на GitHub
+              </a>
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );
