@@ -7,6 +7,10 @@ export default function RootLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+    <head>
+      <title>Кредитный калькулятор</title>
+      <meta name="description" content="Кредитный калькулятор с досрочными погашениями" />
+    </head>
       <body>
       <ThemeProvider
             attribute="class"
