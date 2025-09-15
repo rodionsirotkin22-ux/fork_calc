@@ -43,3 +43,4 @@ Test CI/CD and Docker hub
 Test CI/CD and Docker hub
 test ci/cd
 test deploy on vercel
+test posle npx
