@@ -22,7 +22,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependecies
-        run: npx install
+        run: npm install
 
       - name: Run tests
         run: npm test || echo "No tests defined, skipping"
