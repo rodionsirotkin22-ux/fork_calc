@@ -28,7 +28,7 @@ jobs:
         run: npm test || echo "No tests defined, skipping"
 
       - name: Buil application
-        run: npm run build
+        run: npx run build
 
   deploy:
     runs-on: ubuntu-latest
