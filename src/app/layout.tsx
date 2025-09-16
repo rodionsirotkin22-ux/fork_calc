@@ -4,17 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import { Analytics } from '@vercel/analytics/react';
 
-export default functions RootLayout({ children }) { return (
-	<html lang="en">
-		<body>
-		{children}
-		<Analytics />
-		</body>
-		</html>
-		);
-}
-
-export default function RootLayout({
+import default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
