@@ -23,13 +23,19 @@ jobs:
           cache: 'npm'
 
       - name: Install dependecies
-        run: npm install
+        run: npm ci
+
+      - name: Clear npm cache
+        run: npm cache clean --force
 
       - name: Run tests
         run: npm test || echo "No tests defined, skipping"
 
       - name: Buil application
         run: npx next build
+
+      - name: Debug npx
+        run: npx --version && npm --version && ls -la
 
   deploy:
     runs-on: ubuntu-latest
