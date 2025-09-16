@@ -9,7 +9,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
     <head>
       <title>Кредитный калькулятор</title>
-      <meta name="description" content="Кредитный калькулятор с досрочными пога>
+      <meta name="description" content="Кредитный калькулятор с досрочными погашениями" />
     </head>
       <body>
       <ThemeProvider
