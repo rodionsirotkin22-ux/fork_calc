@@ -1,22 +1,26 @@
-import { Analytics } from '@vercel/analytics/react';
-import './globals.css'; 
-import { ThemeProvider } from '@/components/theme-provider';
+import type { ReactNode } from "react";
+import "./global.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="en" suppressHydrationWarning>
+    <head>
+      <title>Кредитный калькулятор</title>
+      <meta name="description" content="Кредитный калькулятор с досрочными пога>
+    </head>
       <body>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-        >
-          {children}
+      <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+        {children}
         </ThemeProvider>
-        <Analytics />
-      </body>
+        </body>
     </html>
   );
 }
