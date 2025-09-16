@@ -25,4 +25,3 @@ export default function RootLayout({
   );
 }
 
-import { Analytics } from "@vercel/analytics/next"
