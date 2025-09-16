@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import "./global.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
-import default function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
@@ -24,3 +24,5 @@ import default function RootLayout({
     </html>
   );
 }
+
+import { Analytics } from "@vercel/analytics/next"
