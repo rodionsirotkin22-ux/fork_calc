@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 import "./global.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
-# import { Analytics } from '@vercel/analytics/react';
-
 import default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
