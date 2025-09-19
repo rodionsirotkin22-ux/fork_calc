@@ -1,4 +1,3 @@
-# Импорт модулей и библиотек
 const express = require('express');
 const promBundle = require('express-prom-bundle');
 const path = require('path');
